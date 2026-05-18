@@ -6,6 +6,12 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
 
+FROM base AS prod-deps
+RUN apk add --no-cache libc6-compat python3 make g++
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev
+
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -25,8 +31,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/app/generated ./app/generated
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=prod-deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
