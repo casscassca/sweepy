@@ -1,0 +1,13 @@
+services:
+  sweepy:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - sweepy-data:/app/data
+    environment:
+      - DATABASE_URL=file:/app/data/sweepy.db
+    restart: unless-stopped
+
+volumes:
+  sweepy-data:
