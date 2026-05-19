@@ -8,6 +8,9 @@ services:
     environment:
       - DATABASE_URL=file:/app/data/sweepy.db
     restart: unless-stopped
+    logging:
+      options:
+        timestamps: "true"
 
 volumes:
   sweepy-data:
