@@ -8,6 +8,8 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted
+    env:
+      COMPOSE_PROJECT_NAME: sweepy-clone
 
     steps:
       - name: Checkout code

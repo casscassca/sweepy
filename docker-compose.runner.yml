@@ -1,0 +1,24 @@
+services:
+  github-runner:
+    image: myoung34/github-runner:latest
+    container_name: github-runner
+    restart: unless-stopped
+    # ACCESS_TOKEN (a GitHub PAT) lives here, NOT in this committed file.
+    env_file:
+      - .env.runner
+    environment:
+      RUNNER_NAME: sweepy-pi
+      RUNNER_SCOPE: repo
+      REPO_URL: https://github.com/casscassca/sweepy-clone
+      LABELS: self-hosted,pi
+      RUNNER_WORKDIR: /tmp/runner/work
+      # Recreate the runner cleanly each restart so a stale registration
+      # never blocks re-connection.
+      EPHEMERAL: "false"
+    volumes:
+      # Lets the runner drive the host's Docker daemon to (re)build sweepy.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner-work:/tmp/runner
+
+volumes:
+  runner-work:
