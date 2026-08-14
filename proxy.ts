@@ -9,6 +9,14 @@ import { COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 function isPublic(pathname: string): boolean {
   if (pathname.startsWith("/api/auth/")) return true;
   if (pathname === "/api/ha-webhook") return true;
+  // Chrome's install / "add to home screen" fetches these without cookies
+  // (often from Google's WebAPK crawler). If they redirect to login, Android
+  // falls back to a letter from the domain — "J" for jassie.us.
+  if (pathname === "/manifest.webmanifest") return true;
+  if (pathname === "/favicon.ico") return true;
+  if (pathname === "/icon" || pathname.startsWith("/icon.")) return true;
+  if (pathname === "/apple-icon" || pathname.startsWith("/apple-icon.")) return true;
+  if (pathname === "/icon-192.png" || pathname === "/icon-512.png") return true;
   return false;
 }
 
@@ -40,6 +48,8 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  // Run on everything except Next's static assets and the favicon.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Skip Next static assets and the PWA icons / manifest (see isPublic).
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon-192.png|icon-512.png|icon.png|apple-icon.png).*)",
+  ],
 };
