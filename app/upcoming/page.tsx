@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type HTMLAttributes } from "react";
 import { format, parseISO, isToday, isTomorrow } from "date-fns";
 import {
   DndContext, DragEndEvent, PointerSensor, useSensor, useSensors, closestCenter,
@@ -7,11 +7,13 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, Circle, X, RefreshCw } from "lucide-react";
+import { GripVertical, CheckCircle2, Circle, Pencil, X, RefreshCw } from "lucide-react";
 import { dirtColor, dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
+import TaskEditModal from "@/components/TaskEditModal";
+import type { TaskFormTask } from "@/components/TaskFormFields";
 
 type User = { id: string; name: string; color: string };
-type Task = { id: string; name: string; difficulty: number; frequencyDays: number; lastDoneAt: string | null; room: { name: string } };
+type Task = TaskFormTask & { room: { name: string } };
 type Assignment = { id: string; userId: string; date: string; order: number; completedAt: string | null; task: Task; user: User };
 
 const DIFF_COLOR = ["", "#a78bfa", "#fb923c", "#f87171"];
@@ -24,11 +26,13 @@ function dayLabel(dateStr: string) {
   return format(d, "EEEE, MMM d");
 }
 
-function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, isDragOverlay }: {
+function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdit, dragHandleProps, isDragOverlay }: {
   assignment: Assignment; users: User[];
   onComplete?: (id: string, by: string) => void;
   onUncomplete?: (id: string) => void;
   onRemove?: (id: string) => void;
+  onEdit?: (task: Task) => void;
+  dragHandleProps?: HTMLAttributes<HTMLElement>;
   isDragOverlay?: boolean;
 }) {
   const [showWho, setShowWho] = useState(false);
@@ -36,17 +40,21 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, isDra
 
   return (
     <div
-      className="flex items-center gap-2 px-3 py-2.5 rounded-xl mb-1.5 relative group"
+      className="flex items-center gap-2 pl-1.5 pr-3 py-2.5 rounded-xl mb-1.5 relative group"
       style={{
         background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)",
         opacity: isDragOverlay ? 0.9 : 1,
       }}
     >
-      <div className="cursor-grab touch-none p-1.5 md:p-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }}>
+      <div
+        className="cursor-grab touch-none p-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0"
+        style={{ color: "var(--text3)" }}
+        {...dragHandleProps}
+      >
         <GripVertical size={14} />
       </div>
       {onComplete && (
-        <button onClick={() => done ? onUncomplete?.(assignment.id) : setShowWho(true)} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 min-h-11 min-w-11 flex items-center justify-center" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
+        <button onClick={() => done ? onUncomplete?.(assignment.id) : setShowWho(true)} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 min-h-11 w-9 flex items-center justify-center -ml-1" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
           {done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
         </button>
       )}
@@ -71,11 +79,24 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, isDra
           )}
         </div>
       </div>
-      {onRemove && (
-        <button onClick={() => onRemove(assignment.id)} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }} aria-label="Remove task">
-          <X size={16} />
-        </button>
-      )}
+      <div className="flex items-center shrink-0">
+        {onEdit && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onEdit(assignment.task); }}
+            className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+            style={{ color: "var(--text3)" }}
+            aria-label="Edit task"
+          >
+            <Pencil size={16} />
+          </button>
+        )}
+        {onRemove && (
+          <button onClick={() => onRemove(assignment.id)} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }} aria-label="Remove task">
+            <X size={16} />
+          </button>
+        )}
+      </div>
       {showWho && (
         <div className="absolute right-2 top-full mt-1 z-20 rounded-xl shadow-xl p-1.5 min-w-40" style={{ background: "var(--surface)", border: "1px solid var(--border-hover)" }}>
           <p className="text-xs px-2 py-1 mb-0.5" style={{ color: "var(--text3)" }}>Who did this?</p>
@@ -95,9 +116,7 @@ function SortableTaskCard(props: Parameters<typeof TaskCard>[0]) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.assignment.id });
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1 }}>
-      <div {...attributes} {...listeners} style={{ cursor: "grab" }}>
-        <TaskCard {...props} />
-      </div>
+      <TaskCard {...props} dragHandleProps={{ ...attributes, ...listeners }} />
     </div>
   );
 }
@@ -108,6 +127,7 @@ export default function UpcomingPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   async function load() {
     setLoading(true);
@@ -227,6 +247,7 @@ export default function UpcomingPage() {
                           onComplete={isCurrentDay ? complete : undefined}
                           onUncomplete={isCurrentDay ? uncomplete : undefined}
                           onRemove={remove}
+                          onEdit={setEditingTask}
                         />
                       ))}
                       {dayAssignments.length === 0 && (
@@ -247,6 +268,15 @@ export default function UpcomingPage() {
             )}
           </DragOverlay>
         </DndContext>
+      )}
+
+      {editingTask && (
+        <TaskEditModal
+          task={editingTask}
+          users={users}
+          onClose={() => setEditingTask(null)}
+          onSaved={() => { setEditingTask(null); load(); }}
+        />
       )}
     </div>
   );

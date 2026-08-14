@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Pencil, Trash2, Plus, ChevronDown, ChevronRight } from "lucide-react";
-import DirtSlider from "@/components/DirtSlider";
-import { lastDoneAtFromRatio } from "@/lib/dirtiness";
+import TaskFormFields, { FREQ_OPTIONS, parseTaskForm } from "@/components/TaskFormFields";
 
 type User = { id: string; name: string; color: string };
 type Task = {
@@ -15,19 +14,6 @@ type Task = {
   assignableUsers: { user: User }[];
 };
 type Room = { id: string; name: string; icon: string; tasks: Task[] };
-
-const FREQ_OPTIONS = [
-  { label: "Daily", days: 1 },
-  { label: "Every 2 days", days: 2 },
-  { label: "Every 3 days", days: 3 },
-  { label: "Weekly", days: 7 },
-  { label: "Every 2 weeks", days: 14 },
-  { label: "Monthly", days: 30 },
-  { label: "Every 2 months", days: 60 },
-  { label: "Every 3 months", days: 90 },
-  { label: "Every 6 months", days: 180 },
-  { label: "Yearly", days: 365 },
-];
 
 const DIFF = [
   { value: 1, label: "Quick", color: "#a78bfa" },
@@ -101,29 +87,20 @@ export default function RoomsPage() {
 
   async function saveTask(e: React.FormEvent, roomId: string) {
     e.preventDefault();
-    const form = e.target as HTMLFormElement;
-    const name = (form.elements.namedItem("name") as HTMLInputElement).value;
-    const difficulty = Number((form.elements.namedItem("difficulty") as HTMLSelectElement).value);
-    const frequencyDays = Number((form.elements.namedItem("frequencyDays") as HTMLSelectElement).value);
-    const selected = Array.from(form.querySelectorAll<HTMLInputElement>("input[name=assignable]:checked")).map((el) => el.value);
-    const checkedDays = Array.from(form.querySelectorAll<HTMLInputElement>("input[name=day]:checked")).map((el) => el.value);
-    const allowedDays = checkedDays.length === 7 || checkedDays.length === 0 ? null : checkedDays.join(",");
-    const dirtRatio = Number((form.elements.namedItem("dirtRatio") as HTMLInputElement).value);
-    const lastDone = lastDoneAtFromRatio(dirtRatio, frequencyDays);
-    const lastDoneAt = lastDone ? lastDone.toISOString() : null;
+    const body = parseTaskForm(e.target as HTMLFormElement);
 
     if (editingTask) {
       await fetch(`/api/tasks/${editingTask.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, difficulty, frequencyDays, allowedDays, assignableUserIds: selected, lastDoneAt }),
+        body: JSON.stringify(body),
       });
       setEditingTask(null);
     } else {
       await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, roomId, difficulty, frequencyDays, allowedDays, assignableUserIds: selected, lastDoneAt }),
+        body: JSON.stringify({ ...body, roomId }),
       });
       setTaskForms((f) => ({ ...f, [roomId]: false }));
     }
@@ -244,7 +221,7 @@ export default function RoomsPage() {
                   <div key={task.id} style={{ borderBottom: "1px solid var(--border)" }}>
                     {editingTask?.id === task.id ? (
                       <form onSubmit={(e) => saveTask(e, room.id)} className="p-4 space-y-3">
-                        <TaskFormFields task={task} users={users} freqOptions={FREQ_OPTIONS} />
+                        <TaskFormFields task={task} users={users} />
                         <div className="flex gap-2">
                           <button type="submit" className="px-3 py-1.5 rounded-lg text-sm font-medium text-white" style={{ background: "var(--accent)" }}>Save</button>
                           <button type="button" onClick={() => setEditingTask(null)} className="px-3 py-1.5 rounded-lg text-sm" style={{ color: "var(--text3)" }}>Cancel</button>
@@ -278,7 +255,7 @@ export default function RoomsPage() {
 
                 {taskForms[room.id] ? (
                   <form onSubmit={(e) => saveTask(e, room.id)} className="p-4 space-y-3">
-                    <TaskFormFields users={users} freqOptions={FREQ_OPTIONS} />
+                    <TaskFormFields users={users} />
                     <div className="flex gap-2">
                       <button type="submit" className="px-3 py-1.5 rounded-lg text-sm font-medium text-white" style={{ background: "var(--accent)" }}>Add Task</button>
                       <button type="button" onClick={() => setTaskForms((f) => ({ ...f, [room.id]: false }))} className="px-3 py-1.5 rounded-lg text-sm" style={{ color: "var(--text3)" }}>Cancel</button>
@@ -310,108 +287,10 @@ export default function RoomsPage() {
   );
 }
 
-const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const DAY_FULL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function formatAllowedDays(allowedDays: string): string {
   const days = allowedDays.split(",").map(Number).sort();
   if (days.length === 7) return "";
   return days.map((d) => DAY_FULL[d]).join(", ");
-}
-
-function TaskFormFields({
-  task,
-  users,
-  freqOptions,
-}: {
-  task?: Task;
-  users: User[];
-  freqOptions: { label: string; days: number }[];
-}) {
-  const activeDays = task?.allowedDays ? task.allowedDays.split(",").map(Number) : null;
-
-  return (
-    <>
-      <div>
-        <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Task name</label>
-        <input name="name" required defaultValue={task?.name} className="w-full" placeholder="e.g. Wipe counters" />
-      </div>
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Difficulty</label>
-          <select name="difficulty" defaultValue={task?.difficulty ?? 1} className="w-full">
-            <option value={1}>Quick (1 pt)</option>
-            <option value={2}>Medium (2 pts)</option>
-            <option value={3}>Big job (3 pts)</option>
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Frequency</label>
-          <select name="frequencyDays" defaultValue={task?.frequencyDays ?? 7} className="w-full">
-            {freqOptions.map((o) => (
-              <option key={o.days} value={o.days}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <DirtSlider lastDoneAt={task?.lastDoneAt} frequencyDays={task?.frequencyDays} />
-      <div>
-        <label className="block text-xs mb-2" style={{ color: "var(--text3)" }}>
-          Allowed days <span style={{ color: "var(--text3)" }}>(blank = any day)</span>
-        </label>
-        <div className="flex gap-1.5 flex-wrap">
-          {DAY_LABELS.map((label, i) => {
-            const defaultChecked = activeDays ? activeDays.includes(i) : true;
-            return (
-              <label key={i} className="flex flex-col items-center gap-1 cursor-pointer">
-                <input type="checkbox" name="day" value={i} defaultChecked={defaultChecked} className="sr-only peer" />
-                <span
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium transition-all peer-checked:text-white"
-                  style={{
-                    background: "var(--surface2)",
-                    border: "1px solid var(--border)",
-                  }}
-                  onClick={(e) => {
-                    const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
-                    input.checked = !input.checked;
-                    const span = e.currentTarget;
-                    if (input.checked) {
-                      span.style.background = "var(--accent)";
-                      span.style.color = "white";
-                      span.style.borderColor = "var(--accent)";
-                    } else {
-                      span.style.background = "var(--surface2)";
-                      span.style.color = "";
-                      span.style.borderColor = "var(--border)";
-                    }
-                  }}
-                >
-                  {label}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </div>
-      {users.length > 0 && (
-        <div>
-          <label className="block text-xs mb-2" style={{ color: "var(--text3)" }}>
-            Who can do this? <span style={{ color: "var(--text3)" }}>(blank = anyone)</span>
-          </label>
-          <div className="flex flex-wrap gap-3">
-            {users.map((u) => {
-              const checked = task?.assignableUsers.some((au) => au.user.id === u.id) ?? false;
-              return (
-                <label key={u.id} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                  <input type="checkbox" name="assignable" value={u.id} defaultChecked={checked} />
-                  <span className="w-2 h-2 rounded-full" style={{ background: u.color }} />
-                  {u.name}
-                </label>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </>
-  );
 }
