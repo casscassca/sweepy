@@ -31,6 +31,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/app/generated ./app/generated
+COPY --from=builder /app/scripts ./scripts
 COPY --from=prod-deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
