@@ -8,9 +8,10 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, CheckCircle2, Circle, X, RefreshCw } from "lucide-react";
+import { dirtColor, dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 
 type User = { id: string; name: string; color: string };
-type Task = { id: string; name: string; difficulty: number; room: { name: string } };
+type Task = { id: string; name: string; difficulty: number; frequencyDays: number; lastDoneAt: string | null; room: { name: string } };
 type Assignment = { id: string; userId: string; date: string; order: number; completedAt: string | null; task: Task; user: User };
 
 const DIFF_COLOR = ["", "#a78bfa", "#fb923c", "#f87171"];
@@ -53,13 +54,21 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, isDra
         <span className="text-sm" style={{ opacity: done ? 0.35 : 1, textDecoration: done ? "line-through" : "none" }}>
           {assignment.task.name}
         </span>
-        <div className="flex items-center gap-2 mt-0.5">
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: assignment.user.color }} />
           <span className="text-xs" style={{ color: "var(--text3)" }}>{assignment.user.name}</span>
           <span className="text-xs" style={{ color: "var(--text3)" }}>{assignment.task.room.name}</span>
           <span className="text-xs font-medium px-1.5 py-px rounded-full" style={{ background: DIFF_COLOR[assignment.task.difficulty] + "22", color: DIFF_COLOR[assignment.task.difficulty] }}>
             {DIFF_LABEL[assignment.task.difficulty]}
           </span>
+          {!done && (
+            <span
+              className="w-4 h-4 rounded-full shrink-0"
+              style={{ background: dirtColor(dirtinessRatio(assignment.task.lastDoneAt, assignment.task.frequencyDays)) }}
+              title={dirtDetail(assignment.task.lastDoneAt, assignment.task.frequencyDays)}
+              aria-label={dirtDetail(assignment.task.lastDoneAt, assignment.task.frequencyDays)}
+            />
+          )}
         </div>
       </div>
       {onRemove && (

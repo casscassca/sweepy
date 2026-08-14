@@ -41,7 +41,7 @@ function SortableItem({ assignment, users, onComplete, onUncomplete, onRemove }:
         <span className="text-sm" style={{ opacity: done ? 0.35 : 1, textDecoration: done ? "line-through" : "none" }}>
           {assignment.task.name}
         </span>
-        <div className="flex items-center gap-2 mt-0.5">
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="text-xs" style={{ color: "var(--text3)" }}>{assignment.task.room.name}</span>
           <span className="text-xs font-medium px-1.5 py-px rounded-full" style={{ background: DIFF_COLOR[assignment.task.difficulty] + "22", color: DIFF_COLOR[assignment.task.difficulty] }}>
             {DIFF_LABEL[assignment.task.difficulty]}

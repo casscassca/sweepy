@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { name, roomId, difficulty, frequencyDays, allowedDays, assignableUserIds } = await req.json();
+  const { name, roomId, difficulty, frequencyDays, allowedDays, assignableUserIds, lastDoneAt } = await req.json();
 
   // Replace assignable users if provided
   if (assignableUserIds !== undefined) {
@@ -23,6 +23,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(difficulty !== undefined && { difficulty: Number(difficulty) }),
       ...(frequencyDays !== undefined && { frequencyDays: Number(frequencyDays) }),
       ...("allowedDays" in { allowedDays } && { allowedDays: allowedDays ?? null }),
+      ...(lastDoneAt !== undefined && { lastDoneAt: lastDoneAt ? new Date(lastDoneAt) : null }),
     },
     include: { assignableUsers: { include: { user: true } } },
   });

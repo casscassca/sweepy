@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Pencil, Trash2, Plus, ChevronDown, ChevronRight } from "lucide-react";
+import DirtSlider from "@/components/DirtSlider";
+import { lastDoneAtFromRatio } from "@/lib/dirtiness";
 
 type User = { id: string; name: string; color: string };
 type Task = {
@@ -8,6 +10,7 @@ type Task = {
   name: string;
   difficulty: number;
   frequencyDays: number;
+  lastDoneAt: string | null;
   allowedDays: string | null;
   assignableUsers: { user: User }[];
 };
@@ -105,19 +108,22 @@ export default function RoomsPage() {
     const selected = Array.from(form.querySelectorAll<HTMLInputElement>("input[name=assignable]:checked")).map((el) => el.value);
     const checkedDays = Array.from(form.querySelectorAll<HTMLInputElement>("input[name=day]:checked")).map((el) => el.value);
     const allowedDays = checkedDays.length === 7 || checkedDays.length === 0 ? null : checkedDays.join(",");
+    const dirtRatio = Number((form.elements.namedItem("dirtRatio") as HTMLInputElement).value);
+    const lastDone = lastDoneAtFromRatio(dirtRatio, frequencyDays);
+    const lastDoneAt = lastDone ? lastDone.toISOString() : null;
 
     if (editingTask) {
       await fetch(`/api/tasks/${editingTask.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, difficulty, frequencyDays, allowedDays, assignableUserIds: selected }),
+        body: JSON.stringify({ name, difficulty, frequencyDays, allowedDays, assignableUserIds: selected, lastDoneAt }),
       });
       setEditingTask(null);
     } else {
       await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, roomId, difficulty, frequencyDays, allowedDays, assignableUserIds: selected }),
+        body: JSON.stringify({ name, roomId, difficulty, frequencyDays, allowedDays, assignableUserIds: selected, lastDoneAt }),
       });
       setTaskForms((f) => ({ ...f, [roomId]: false }));
     }
@@ -348,6 +354,7 @@ function TaskFormFields({
           </select>
         </div>
       </div>
+      <DirtSlider lastDoneAt={task?.lastDoneAt} frequencyDays={task?.frequencyDays} />
       <div>
         <label className="block text-xs mb-2" style={{ color: "var(--text3)" }}>
           Allowed days <span style={{ color: "var(--text3)" }}>(blank = any day)</span>

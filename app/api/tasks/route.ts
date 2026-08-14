@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
-  const { name, roomId, difficulty, frequencyDays, allowedDays, assignableUserIds } = await req.json();
+  const { name, roomId, difficulty, frequencyDays, allowedDays, assignableUserIds, lastDoneAt } = await req.json();
 
   const task = await prisma.task.create({
     data: {
@@ -11,6 +11,7 @@ export async function POST(req: Request) {
       difficulty: Number(difficulty),
       frequencyDays: Number(frequencyDays),
       allowedDays: allowedDays ?? null,
+      lastDoneAt: lastDoneAt ? new Date(lastDoneAt) : null,
       assignableUsers: assignableUserIds?.length
         ? { create: assignableUserIds.map((userId: string) => ({ userId })) }
         : undefined,
