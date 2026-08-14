@@ -1,12 +1,16 @@
 services:
   sweepy:
+    image: ghcr.io/casscassca/sweepy-clone:latest
     build: .
+    env_file:
+      - path: .env
+        required: false
     ports:
-      - "3000:3000"
+      - "${SWEEPY_PORT:-3000}:3000"
     volumes:
       - sweepy-data:/app/data
     environment:
-      - DATABASE_URL=file:/app/data/sweepy.db
+      DATABASE_URL: ${DATABASE_URL:-file:/app/data/sweepy.db}
     restart: unless-stopped
 
 volumes:
