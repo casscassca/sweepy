@@ -4,8 +4,8 @@
  * Create the first account, or set/reset a household member's login password.
  *
  * Run it on the Pi inside the running container:
- *   docker exec -it sweepy-clone-sweepy-1 node scripts/set-password.js
- *   docker exec -it sweepy-clone-sweepy-1 node scripts/set-password.js Cassandra
+ *   docker exec -it sweepy node scripts/set-password.js
+ *   docker exec -it sweepy node scripts/set-password.js Cassandra
  *
  * If the named person doesn't exist yet (e.g. an empty database), it offers to
  * create them — this is how you bootstrap the very first login. It writes

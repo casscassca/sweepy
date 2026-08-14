@@ -6,7 +6,7 @@
  * the real data volume on the Pi — not the local dev.db.
  *
  * Run on the Pi:
- *   docker exec -it sweepy-clone-sweepy-1 node scripts/seed.js
+ *   docker exec -it sweepy node scripts/seed.js
  *
  * It does NOT create users (do that with set-password.js). If the database
  * already has rooms/tasks/history, it asks before wiping them.

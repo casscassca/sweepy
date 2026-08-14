@@ -8,7 +8,6 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  COMPOSE_PROJECT_NAME: sweepy-clone
 
 concurrency:
   group: docker
@@ -62,7 +61,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Pull and recreate Sweepy
-        working-directory: /home/cassandrameijers/sweepy-clone
+        working-directory: /home/cassandrameijers/sweepy
         run: |
           set -euo pipefail
           git pull --ff-only
