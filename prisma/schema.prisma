@@ -48,6 +48,11 @@ model User {
   notifyTime     String   @default("08:00")
   color          String   @default("#6366f1")
   createdAt      DateTime @default(now())
+  // Auth: scrypt password hash (null = no password set, cannot log in yet).
+  passwordHash   String?
+  // Per-user secret for the Home Assistant webhook — both authorizes the call
+  // and identifies who acted (so completions credit the right person).
+  webhookSecret  String   @default("")
   assignableTasks TaskAssignableUser[]
   assignments     DailyAssignment[]
   completions     CompletionLog[]
@@ -85,4 +90,7 @@ model Settings {
   haUrl     String @default("")
   haToken   String @default("")
   darkMode  Boolean @default(false)
+  // Secret used to sign session cookies. Generated once on first use and kept
+  // in the DB so it persists across deploys (the data volume) and never lives in git.
+  sessionSecret String @default("")
 }

@@ -7,15 +7,24 @@ export async function GET() {
     create: { id: "singleton" },
     update: {},
   });
-  return NextResponse.json(settings);
+  // Never expose the session-signing secret to the client.
+  const { sessionSecret, ...safe } = settings;
+  return NextResponse.json(safe);
 }
 
 export async function PATCH(req: Request) {
-  const data = await req.json();
+  const body = await req.json();
+  // Whitelist writable fields — sessionSecret is managed by the server only.
+  const data: Record<string, unknown> = {};
+  if (typeof body.haUrl === "string") data.haUrl = body.haUrl;
+  if (typeof body.haToken === "string") data.haToken = body.haToken;
+  if (typeof body.darkMode === "boolean") data.darkMode = body.darkMode;
+
   const settings = await prisma.settings.upsert({
     where: { id: "singleton" },
     create: { id: "singleton", ...data },
     update: data,
   });
-  return NextResponse.json(settings);
+  const { sessionSecret, ...safe } = settings;
+  return NextResponse.json(safe);
 }

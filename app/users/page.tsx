@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, KeyRound, RefreshCw, Check, Copy } from "lucide-react";
 
-type User = { id: string; name: string; haNotifyTarget: string; dailyCapacity: number; notifyTime: string; color: string };
+type User = { id: string; name: string; haNotifyTarget: string; dailyCapacity: number; notifyTime: string; color: string; webhookSecret: string; hasPassword: boolean };
 type UserStats = { user: User; weekly: number; monthly: number; yearly: number };
 
 const COLORS = ["#a78bfa", "#f472b6", "#fb923c", "#34d399", "#60a5fa", "#f87171", "#facc15", "#2dd4bf"];
@@ -12,7 +12,9 @@ export default function UsersPage() {
   const [stats, setStats] = useState<UserStats[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
-  const [form, setForm] = useState({ name: "", haNotifyTarget: "", dailyCapacity: "6", notifyTime: "08:00", color: COLORS[0] });
+  const [form, setForm] = useState({ name: "", haNotifyTarget: "", dailyCapacity: "6", notifyTime: "08:00", color: COLORS[0], password: "" });
+  const [showToken, setShowToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function load() {
     const [u, s] = await Promise.all([
@@ -27,25 +29,40 @@ export default function UsersPage() {
 
   function startEdit(user: User) {
     setEditing(user);
-    setForm({ name: user.name, haNotifyTarget: user.haNotifyTarget, dailyCapacity: String(user.dailyCapacity), notifyTime: user.notifyTime, color: user.color });
+    setForm({ name: user.name, haNotifyTarget: user.haNotifyTarget, dailyCapacity: String(user.dailyCapacity), notifyTime: user.notifyTime, color: user.color, password: "" });
     setShowForm(true);
   }
 
   function startNew() {
     setEditing(null);
-    setForm({ name: "", haNotifyTarget: "", dailyCapacity: "6", notifyTime: "08:00", color: COLORS[users.length % COLORS.length] });
+    setForm({ name: "", haNotifyTarget: "", dailyCapacity: "6", notifyTime: "08:00", color: COLORS[users.length % COLORS.length], password: "" });
     setShowForm(true);
   }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    const body = { ...form, dailyCapacity: Number(form.dailyCapacity) };
+    // Only send a password when one was typed (blank = leave unchanged).
+    const { password, ...rest } = form;
+    const body: Record<string, unknown> = { ...rest, dailyCapacity: Number(form.dailyCapacity) };
+    if (password.trim()) body.password = password;
     if (editing) {
       await fetch(`/api/users/${editing.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     } else {
       await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     }
     setShowForm(false); setEditing(null); load();
+  }
+
+  async function regenerateToken(id: string) {
+    if (!confirm("Generate a new webhook token? The old one stops working — you'll need to update this person's Home Assistant automation.")) return;
+    await fetch(`/api/users/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regenerateWebhookSecret: true }) });
+    load();
+  }
+
+  function copyToken(token: string) {
+    navigator.clipboard?.writeText(token);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   async function remove(id: string) {
@@ -98,6 +115,13 @@ export default function UsersPage() {
                 ))}
               </div>
             </div>
+            <div>
+              <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>
+                {editing ? "Login password" : "Login password (optional)"}
+              </label>
+              <input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder={editing && editing.hasPassword ? "•••••••• (leave blank to keep)" : "Set a password"} autoComplete="new-password" />
+              <p className="text-xs mt-1.5" style={{ color: "var(--text3)" }}>This person uses it to log in. Leave blank to keep the current one.</p>
+            </div>
             <div className="flex gap-2 pt-1">
               <button type="submit" className="px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: "var(--accent)" }}>Save</button>
               <button type="button" onClick={() => { setShowForm(false); setEditing(null); }} className="px-4 py-2 rounded-xl text-sm" style={{ color: "var(--text3)" }}>Cancel</button>
@@ -117,18 +141,49 @@ export default function UsersPage() {
                   {user.name[0].toUpperCase()}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium">{user.name}</p>
+                  <p className="font-medium flex items-center gap-2">
+                    {user.name}
+                    {!user.hasPassword && (
+                      <span className="text-xs font-normal px-1.5 py-px rounded-full" style={{ background: "var(--red)22", color: "var(--red)" }}>no password</span>
+                    )}
+                  </p>
                   <div className="flex gap-4 mt-0.5 flex-wrap">
                     <span className="text-xs" style={{ color: "var(--text3)" }}>{user.dailyCapacity} pts/day</span>
                     <span className="text-xs" style={{ color: "var(--text3)" }}>notify {user.notifyTime}</span>
                     {user.haNotifyTarget && <span className="text-xs font-mono" style={{ color: "var(--text3)" }}>{user.haNotifyTarget}</span>}
                   </div>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => startEdit(user)} className="p-2 rounded-xl" style={{ color: "var(--text3)" }}><Pencil size={14} /></button>
-                  <button onClick={() => remove(user.id)} className="p-2 rounded-xl" style={{ color: "var(--red)" }}><Trash2 size={14} /></button>
+                <div className="flex gap-1">
+                  <button onClick={() => setShowToken(showToken === user.id ? null : user.id)} title="Webhook token" className="p-2 rounded-xl" style={{ color: showToken === user.id ? "var(--accent)" : "var(--text3)" }}><KeyRound size={14} /></button>
+                  <button onClick={() => startEdit(user)} className="p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }}><Pencil size={14} /></button>
+                  <button onClick={() => remove(user.id)} className="p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--red)" }}><Trash2 size={14} /></button>
                 </div>
               </div>
+
+              {/* Webhook token panel */}
+              {showToken === user.id && (
+                <div className="px-4 pb-4" style={{ borderTop: "1px solid var(--border)" }}>
+                  <p className="text-xs mt-3 mb-1.5" style={{ color: "var(--text3)" }}>
+                    Home Assistant webhook token — put this in {user.name}&apos;s automation so their &quot;Done&quot; / &quot;Defer&quot; taps are credited to them.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs font-mono px-3 py-2 rounded-lg overflow-x-auto whitespace-nowrap" style={{ background: "var(--surface2)", color: "var(--text2)" }}>
+                      {user.webhookSecret || "(none — generate one)"}
+                    </code>
+                    {user.webhookSecret && (
+                      <button onClick={() => copyToken(user.webhookSecret)} title="Copy" className="p-2 rounded-lg shrink-0" style={{ color: "var(--text3)" }}>
+                        {copied ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                    )}
+                    <button onClick={() => regenerateToken(user.id)} title="Generate new token" className="p-2 rounded-lg shrink-0" style={{ color: "var(--text3)" }}>
+                      <RefreshCw size={14} />
+                    </button>
+                  </div>
+                  <p className="text-xs mt-2 font-mono" style={{ color: "var(--text3)" }}>
+                    Send it as header <span style={{ color: "var(--text2)" }}>x-webhook-secret</span> to /api/ha-webhook
+                  </p>
+                </div>
+              )}
 
               {/* Stats row */}
               {userStats && (
