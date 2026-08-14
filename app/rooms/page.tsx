@@ -133,7 +133,7 @@ export default function RoomsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between gap-3 mb-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Rooms & Tasks</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>
@@ -142,7 +142,7 @@ export default function RoomsPage() {
         </div>
         <button
           onClick={() => { setShowRoomForm(true); setEditingRoom(null); setRoomName(""); setRoomIcon("🏠"); }}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium text-white transition-colors"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium text-white transition-colors shrink-0"
           style={{ background: "var(--accent)" }}
         >
           <Plus size={14} /> Add Room
@@ -152,7 +152,7 @@ export default function RoomsPage() {
       {isRoomFormOpen && (
         <form
           onSubmit={saveRoom}
-          className="mb-5 p-4 rounded-2xl flex gap-3 items-end"
+          className="mb-5 p-4 rounded-2xl flex flex-col sm:flex-row gap-3 sm:items-end"
           style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         >
           <div>
@@ -212,14 +212,16 @@ export default function RoomsPage() {
               </span>
               <button
                 onClick={(e) => { e.stopPropagation(); setEditingRoom(room); setRoomName(room.name); setRoomIcon(room.icon); setShowRoomForm(false); }}
-                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                 style={{ color: "var(--text3)" }}
+                aria-label="Edit room"
               >
                 <Pencil size={13} />
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); deleteRoom(room.id); }}
-                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                aria-label="Delete room"
                 style={{ color: "var(--red)" }}
               >
                 <Trash2 size={13} />
@@ -259,9 +261,9 @@ export default function RoomsPage() {
                             )}
                           </div>
                         </div>
-                        <div className="flex gap-1 opacity-0 group-hover/task:opacity-100 transition-opacity">
-                          <button onClick={() => setEditingTask({ ...task, roomId: room.id })} className="p-1.5 rounded-lg" style={{ color: "var(--text3)" }}><Pencil size={13} /></button>
-                          <button onClick={() => deleteTask(task.id)} className="p-1.5 rounded-lg" style={{ color: "var(--red)" }}><Trash2 size={13} /></button>
+                        <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover/task:opacity-100 transition-opacity">
+                          <button onClick={() => setEditingTask({ ...task, roomId: room.id })} className="p-2 rounded-lg" style={{ color: "var(--text3)" }} aria-label="Edit task"><Pencil size={13} /></button>
+                          <button onClick={() => deleteTask(task.id)} className="p-2 rounded-lg" style={{ color: "var(--red)" }} aria-label="Delete task"><Trash2 size={13} /></button>
                         </div>
                       </div>
                     )}
@@ -350,7 +352,7 @@ function TaskFormFields({
         <label className="block text-xs mb-2" style={{ color: "var(--text3)" }}>
           Allowed days <span style={{ color: "var(--text3)" }}>(blank = any day)</span>
         </label>
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 flex-wrap">
           {DAY_LABELS.map((label, i) => {
             const defaultChecked = activeDays ? activeDays.includes(i) : true;
             return (

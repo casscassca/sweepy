@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import ThemeProvider from "@/components/ThemeProvider";
@@ -6,6 +6,22 @@ import ThemeProvider from "@/components/ThemeProvider";
 export const metadata: Metadata = {
   title: "Sweepy",
   description: "Home cleaning task manager",
+  applicationName: "Sweepy",
+  appleWebApp: {
+    capable: true,
+    title: "Sweepy",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f3f9" },
+    { media: "(prefers-color-scheme: dark)", color: "#08080f" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -14,7 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex flex-col" style={{ background: "var(--bg)" }}>
         <ThemeProvider>
           <Nav />
-          <main className="flex-1 max-w-4xl mx-auto w-full px-5 py-8">{children}</main>
+          <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-6 md:px-5 md:py-8 max-md:pb-24">
+            {children}
+          </main>
         </ThemeProvider>
       </body>
     </html>

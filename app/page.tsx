@@ -31,11 +31,11 @@ function SortableItem({ assignment, users, onComplete, onUncomplete, onRemove }:
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}
       className="flex items-center gap-2 px-3 py-2.5 rounded-xl mb-1.5 relative group"
     >
-      <button {...attributes} {...listeners} className="cursor-grab touch-none p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }}>
+      <button {...attributes} {...listeners} aria-label="Reorder task" className="cursor-grab touch-none p-1.5 md:p-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }}>
         <GripVertical size={14} />
       </button>
-      <button onClick={() => done ? onUncomplete(assignment.id) : setShowWho(true)} className="shrink-0 transition-colors" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
-        {done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+      <button onClick={() => done ? onUncomplete(assignment.id) : setShowWho(true)} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 transition-colors min-h-11 min-w-11 flex items-center justify-center" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
+        {done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
       </button>
       <div className="flex-1 min-w-0">
         <span className="text-sm" style={{ opacity: done ? 0.35 : 1, textDecoration: done ? "line-through" : "none" }}>
@@ -48,8 +48,8 @@ function SortableItem({ assignment, users, onComplete, onUncomplete, onRemove }:
           </span>
         </div>
       </div>
-      <button onClick={() => onRemove(assignment.id)} className="p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }} title="Remove from today">
-        <X size={14} />
+      <button onClick={() => onRemove(assignment.id)} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }} title="Remove from today" aria-label="Remove from today">
+        <X size={16} />
       </button>
 
       {showWho && (
@@ -136,7 +136,7 @@ export default function TodayPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between gap-3 mb-6">
         <div>
           <p className="text-sm mb-1" style={{ color: "var(--text3)" }}>{format(new Date(), "EEEE, MMMM d")}</p>
           <h1 className="text-2xl font-semibold tracking-tight">Today</h1>

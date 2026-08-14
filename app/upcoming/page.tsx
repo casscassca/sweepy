@@ -41,12 +41,12 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, isDra
         opacity: isDragOverlay ? 0.9 : 1,
       }}
     >
-      <div className="cursor-grab touch-none p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }}>
+      <div className="cursor-grab touch-none p-1.5 md:p-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }}>
         <GripVertical size={14} />
       </div>
       {onComplete && (
-        <button onClick={() => done ? onUncomplete?.(assignment.id) : setShowWho(true)} className="shrink-0" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
-          {done ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+        <button onClick={() => done ? onUncomplete?.(assignment.id) : setShowWho(true)} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 min-h-11 min-w-11 flex items-center justify-center" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
+          {done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
         </button>
       )}
       <div className="flex-1 min-w-0">
@@ -63,8 +63,8 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, isDra
         </div>
       </div>
       {onRemove && (
-        <button onClick={() => onRemove(assignment.id)} className="p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }}>
-          <X size={14} />
+        <button onClick={() => onRemove(assignment.id)} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }} aria-label="Remove task">
+          <X size={16} />
         </button>
       )}
       {showWho && (
@@ -163,7 +163,7 @@ export default function UpcomingPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-between gap-3 mb-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Upcoming</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>

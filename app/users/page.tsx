@@ -75,12 +75,12 @@ export default function UsersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between gap-3 mb-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">People</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>{users.length} household member{users.length !== 1 ? "s" : ""}</p>
         </div>
-        <button onClick={startNew} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium text-white" style={{ background: "var(--accent)" }}>
+        <button onClick={startNew} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium text-white shrink-0" style={{ background: "var(--accent)" }}>
           <Plus size={14} /> Add Person
         </button>
       </div>
@@ -89,7 +89,7 @@ export default function UsersPage() {
         <div className="mb-6 p-5 rounded-2xl space-y-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
           <h2 className="font-medium">{editing ? "Edit person" : "New person"}</h2>
           <form onSubmit={save} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Name</label>
                 <input required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Cassandra" autoFocus />
@@ -136,7 +136,7 @@ export default function UsersPage() {
           return (
             <div key={user.id} className="rounded-2xl overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
               {/* Person row */}
-              <div className="flex items-center gap-4 px-4 py-4 group">
+              <div className="flex items-center gap-3 sm:gap-4 px-4 py-4 group">
                 <span className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0" style={{ background: user.color + "22", color: user.color }}>
                   {user.name[0].toUpperCase()}
                 </span>
@@ -154,9 +154,9 @@ export default function UsersPage() {
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => setShowToken(showToken === user.id ? null : user.id)} title="Webhook token" className="p-2 rounded-xl" style={{ color: showToken === user.id ? "var(--accent)" : "var(--text3)" }}><KeyRound size={14} /></button>
-                  <button onClick={() => startEdit(user)} className="p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }}><Pencil size={14} /></button>
-                  <button onClick={() => remove(user.id)} className="p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--red)" }}><Trash2 size={14} /></button>
+                  <button onClick={() => setShowToken(showToken === user.id ? null : user.id)} title="Webhook token" aria-label="Webhook token" className="p-2 rounded-xl" style={{ color: showToken === user.id ? "var(--accent)" : "var(--text3)" }}><KeyRound size={14} /></button>
+                  <button onClick={() => startEdit(user)} className="p-2 rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }} aria-label="Edit person"><Pencil size={14} /></button>
+                  <button onClick={() => remove(user.id)} className="p-2 rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--red)" }} aria-label="Remove person"><Trash2 size={14} /></button>
                 </div>
               </div>
 
@@ -166,8 +166,8 @@ export default function UsersPage() {
                   <p className="text-xs mt-3 mb-1.5" style={{ color: "var(--text3)" }}>
                     Home Assistant webhook token — put this in {user.name}&apos;s automation so their &quot;Done&quot; / &quot;Defer&quot; taps are credited to them.
                   </p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-xs font-mono px-3 py-2 rounded-lg overflow-x-auto whitespace-nowrap" style={{ background: "var(--surface2)", color: "var(--text2)" }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <code className="flex-1 min-w-0 text-xs font-mono px-3 py-2 rounded-lg overflow-x-auto whitespace-nowrap" style={{ background: "var(--surface2)", color: "var(--text2)" }}>
                       {user.webhookSecret || "(none — generate one)"}
                     </code>
                     {user.webhookSecret && (
