@@ -1,0 +1,180 @@
+[
+  {
+    "name": "Kitchen",
+    "icon": "🍳",
+    "tasks": [
+      { "name": "Organize Pantry", "difficulty": 3, "dirtiness": 2, "frequencyDays": 90 },
+      { "name": "Clean Oven", "difficulty": 1, "dirtiness": 1, "frequencyDays": 120 },
+      { "name": "Clean Microwave", "difficulty": 1, "dirtiness": 2, "frequencyDays": 14 },
+      { "name": "Organize & Clean Cabinets", "difficulty": 3, "dirtiness": 2, "frequencyDays": 150 },
+      { "name": "Clean Stovetop", "difficulty": 1, "dirtiness": 2, "frequencyDays": 7 },
+      { "name": "Clean Espresso Machine", "difficulty": 2, "dirtiness": 3, "frequencyDays": 90 },
+      { "name": "Organize & Clean Under Sink", "difficulty": 1, "dirtiness": 3, "frequencyDays": 42 },
+      { "name": "Clean Fridge", "difficulty": 2, "dirtiness": 1, "frequencyDays": 90 },
+      { "name": "Clean Freezer", "difficulty": 2, "dirtiness": 1, "frequencyDays": 90 },
+      { "name": "Clean Light Fixtures", "difficulty": 2, "dirtiness": 2, "frequencyDays": 90 },
+      { "name": "Clean Hood Vents", "difficulty": 2, "dirtiness": 3, "frequencyDays": 30 },
+      { "name": "Deep Clean Counters & Surfaces", "difficulty": 1, "dirtiness": 2, "frequencyDays": 7 },
+      { "name": "Vacuum Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 7 },
+      { "name": "Mop Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 14 }
+    ]
+  },
+  {
+    "name": "Living Room",
+    "icon": "🛋️",
+    "tasks": [
+      { "name": "Clean TV", "difficulty": 1, "dirtiness": 1, "frequencyDays": 120 },
+      { "name": "Dust Surfaces", "difficulty": 1, "dirtiness": 1, "frequencyDays": 14 },
+      { "name": "Clean Couch", "difficulty": 3, "dirtiness": 1, "frequencyDays": 180 },
+      { "name": "Dust Ceiling Fan", "difficulty": 1, "dirtiness": 1, "frequencyDays": 180 },
+      { "name": "Vacuum Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 7 },
+      { "name": "Mop Floors", "difficulty": 1, "dirtiness": 2, "frequencyDays": 21 }
+    ]
+  },
+  {
+    "name": "Housewide",
+    "icon": "🪴",
+    "tasks": [
+      { "name": "Water Houseplants", "difficulty": 1, "dirtiness": 1, "frequencyDays": 7 }
+    ]
+  },
+  {
+    "name": "Jason's Office",
+    "icon": "💻",
+    "tasks": [
+      { "name": "Vacuum Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 7 },
+      { "name": "Mop Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 30 },
+      { "name": "Dust Ceiling Fan", "difficulty": 1, "dirtiness": 1, "frequencyDays": 180 },
+      { "name": "Organize Closet", "difficulty": 3, "dirtiness": 2, "frequencyDays": 150 }
+    ]
+  },
+  {
+    "name": "Laundry & Entryway",
+    "icon": "🧺",
+    "tasks": [
+      { "name": "Clean Washer", "difficulty": 1, "dirtiness": 2, "frequencyDays": 90 },
+      { "name": "Wash Litter Box", "difficulty": 2, "dirtiness": 3, "frequencyDays": 30 },
+      { "name": "Vacuum / Sweep Floors", "difficulty": 1, "dirtiness": 2, "frequencyDays": 7 },
+      { "name": "Mop Floors", "difficulty": 1, "dirtiness": 2, "frequencyDays": 7 },
+      { "name": "Organize Laundry Cabinets", "difficulty": 2, "dirtiness": 2, "frequencyDays": 90 },
+      { "name": "Organize Entryway Closet", "difficulty": 1, "dirtiness": 2, "frequencyDays": 90 }
+    ]
+  },
+  {
+    "name": "Downstairs Bathroom",
+    "icon": "🚽",
+    "tasks": [
+      { "name": "Vacuum Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 14 },
+      { "name": "Mop Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 21 },
+      { "name": "Clean & Run Tub", "difficulty": 1, "dirtiness": 1, "frequencyDays": 30 },
+      { "name": "Surfaces & Mirrors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 90 },
+      { "name": "Clean Toilet", "difficulty": 1, "dirtiness": 2, "frequencyDays": 14 }
+    ]
+  },
+  {
+    "name": "Dining Room",
+    "icon": "🍽️",
+    "tasks": [
+      { "name": "Vacuum Floors", "difficulty": 1, "dirtiness": 2, "frequencyDays": 7 },
+      { "name": "Mop Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 21 },
+      { "name": "Reset & Clean Juice Box Setup", "difficulty": 2, "dirtiness": 1, "frequencyDays": 3 },
+      { "name": "Clean Chandelier", "difficulty": 1, "dirtiness": 2, "frequencyDays": 90 }
+    ]
+  },
+  {
+    "name": "Server Room",
+    "icon": "🖥️",
+    "tasks": [
+      { "name": "Vacuum Floors", "difficulty": 1, "dirtiness": 2, "frequencyDays": 21 },
+      { "name": "Mop Floors", "difficulty": 1, "dirtiness": 2, "frequencyDays": 60 },
+      { "name": "Dust Surfaces", "difficulty": 1, "dirtiness": 2, "frequencyDays": 60 }
+    ]
+  },
+  {
+    "name": "Master Bathroom",
+    "icon": "🛁",
+    "tasks": [
+      { "name": "Vacuum Floors", "difficulty": 1, "dirtiness": 2, "frequencyDays": 7 },
+      { "name": "Mop Floors", "difficulty": 1, "dirtiness": 2, "frequencyDays": 21 },
+      { "name": "Clean Vanity (Mirrors, Counters & Sinks)", "difficulty": 1, "dirtiness": 1, "frequencyDays": 7 },
+      { "name": "Clean Out Cabinets (Water Closet & Vanity)", "difficulty": 2, "dirtiness": 2, "frequencyDays": 90 },
+      { "name": "Clean Shower", "difficulty": 2, "dirtiness": 2, "frequencyDays": 42 },
+      { "name": "Clean Shower Glass", "difficulty": 1, "dirtiness": 3, "frequencyDays": 14 },
+      { "name": "Clean Toilet", "difficulty": 1, "dirtiness": 1, "frequencyDays": 7 },
+      { "name": "Organize & Clean Linen Closet", "difficulty": 1, "dirtiness": 3, "frequencyDays": 42 }
+    ]
+  },
+  {
+    "name": "Master Bedroom",
+    "icon": "🛏️",
+    "tasks": [
+      { "name": "Wash Sheets", "difficulty": 1, "dirtiness": 2, "frequencyDays": 10 },
+      { "name": "Clean Bedside Tables", "difficulty": 1, "dirtiness": 1, "frequencyDays": 90 },
+      { "name": "Organize Dresser", "difficulty": 2, "dirtiness": 1, "frequencyDays": 90 },
+      { "name": "Clean Mirror", "difficulty": 1, "dirtiness": 1, "frequencyDays": 14 },
+      { "name": "Organize & Clean Closet", "difficulty": 2, "dirtiness": 2, "frequencyDays": 90 },
+      { "name": "Vacuum Floors", "difficulty": 1, "dirtiness": 2, "frequencyDays": 7 },
+      { "name": "Mop Floors", "difficulty": 1, "dirtiness": 2, "frequencyDays": 21 }
+    ]
+  },
+  {
+    "name": "Garage",
+    "icon": "🚗",
+    "tasks": [
+      { "name": "Sweep Out Garage Floor", "difficulty": 1, "dirtiness": 3, "frequencyDays": 14 },
+      { "name": "Organize Storage", "difficulty": 3, "dirtiness": 2, "frequencyDays": 180 }
+    ]
+  },
+  {
+    "name": "Yard & Patio",
+    "icon": "🌿",
+    "tasks": [
+      { "name": "Mow the Lawn", "difficulty": 3, "dirtiness": 3, "frequencyDays": 14 },
+      { "name": "Spray & Clean Up Patio", "difficulty": 1, "dirtiness": 3, "frequencyDays": 7 },
+      { "name": "Clear Cobwebs", "difficulty": 3, "dirtiness": 3, "frequencyDays": 30 },
+      { "name": "Apply Pesticide Treatment", "difficulty": 2, "dirtiness": 2, "frequencyDays": 90 }
+    ]
+  },
+  {
+    "name": "Upstairs Landing",
+    "icon": "🪜",
+    "tasks": [
+      { "name": "Vacuum Floors & Stairs", "difficulty": 1, "dirtiness": 2, "frequencyDays": 7 },
+      { "name": "Mop Floors & Stairs", "difficulty": 1, "dirtiness": 2, "frequencyDays": 21 },
+      { "name": "Dust & Clean Surfaces", "difficulty": 1, "dirtiness": 2, "frequencyDays": 14 },
+      { "name": "Organize & Clean Linen Closet", "difficulty": 1, "dirtiness": 1, "frequencyDays": 90 }
+    ]
+  },
+  {
+    "name": "Guest Bathroom",
+    "icon": "🚿",
+    "tasks": [
+      { "name": "Vacuum Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 14 },
+      { "name": "Mop Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 21 },
+      { "name": "Clean & Run Tub/Shower", "difficulty": 1, "dirtiness": 1, "frequencyDays": 30 },
+      { "name": "Clean Vanity (Mirror, Sink, Counter & Cabinets)", "difficulty": 1, "dirtiness": 1, "frequencyDays": 90 },
+      { "name": "Clean Toilet", "difficulty": 1, "dirtiness": 2, "frequencyDays": 14 }
+    ]
+  },
+  {
+    "name": "Primary Office",
+    "icon": "💻",
+    "tasks": [
+      { "name": "Vacuum Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 7 },
+      { "name": "Mop Floors", "difficulty": 1, "dirtiness": 1, "frequencyDays": 21 },
+      { "name": "Dust Ceiling Fan", "difficulty": 1, "dirtiness": 1, "frequencyDays": 180 },
+      { "name": "Clean Surfaces", "difficulty": 1, "dirtiness": 1, "frequencyDays": 30 },
+      { "name": "Organize & Clean Closet", "difficulty": 1, "dirtiness": 2, "frequencyDays": 180 },
+      { "name": "Organize Storage", "difficulty": 1, "dirtiness": 1, "frequencyDays": 180 }
+    ]
+  },
+  {
+    "name": "Guest Bedroom",
+    "icon": "🛏️",
+    "tasks": [
+      { "name": "Dust Ceiling Fan", "difficulty": 1, "dirtiness": 1, "frequencyDays": 180 },
+      { "name": "Dust & Clean Surfaces", "difficulty": 1, "dirtiness": 1, "frequencyDays": 60 },
+      { "name": "Organize Closet", "difficulty": 1, "dirtiness": 1, "frequencyDays": 180 }
+    ]
+  }
+]
