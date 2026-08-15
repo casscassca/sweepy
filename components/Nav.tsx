@@ -3,7 +3,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CalendarCheck, CalendarRange, House, LogOut, Settings, Users } from "lucide-react";
-import DogIcon from "./DogIcon";
 
 const links = [
   { href: "/", label: "Today", icon: CalendarCheck },
@@ -39,8 +38,8 @@ export default function Nav() {
         style={{ background: "var(--bg2)", borderBottom: "1px solid var(--border)", boxShadow: "var(--shadow)" }}
       >
         <div className="max-w-4xl mx-auto px-4 md:px-5 flex items-center gap-1 h-14">
-          <Link href="/" className="flex items-center gap-2.5 mr-2 md:mr-5 shrink-0 min-h-11">
-            <DogIcon size={30} />
+          <Link href="/" className="flex items-center gap-2 mr-2 md:mr-5 shrink-0 min-h-11">
+            <img src="/mascot.png" alt="" width={40} height={47} className="h-10 w-auto" />
             <span className="font-semibold text-base tracking-tight" style={{ color: "var(--text)" }}>
               Sweepy
             </span>
