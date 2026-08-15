@@ -37,4 +37,4 @@ HA_URL=http://host.docker.internal:8123
 HA_TOKEN=...
 ```
 
-Notify entities (`notify.cassandras_iphone`) are set on each person in the app. Webhook tokens for Done / Tomorrow are still per person (the key on People).
+Notify entities (`notify.pixel` or `notify.mobile_app_pixel`) are set on each person in the app. Sweepy listens on the HA websocket for Done / Tomorrow / Later — no automation required.

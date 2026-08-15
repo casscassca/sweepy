@@ -1,14 +1,36 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
+import { format } from "date-fns";
+
+type HaPerson = { name: string; target: string; resolved: string | null; ok: boolean; hint: string | null };
+type HaLog = { id: string; createdAt: string; kind: string; ok: boolean; userName: string; summary: string; detail: string };
+type HaStatus = {
+  configured: boolean;
+  url: string | null;
+  reachable: boolean;
+  listening?: boolean;
+  lastEventAt?: string | null;
+  error: string | null;
+  services: string[];
+  entities: string[];
+  people: HaPerson[];
+  log: HaLog[];
+};
 
 export default function SettingsPage() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [darkMode, setDarkMode] = useState(false);
+  const [ha, setHa] = useState<HaStatus | null>(null);
+  const [openLogId, setOpenLogId] = useState<string | null>(null);
 
   useEffect(() => {
     setWebhookUrl(`${window.location.origin}/api/ha-webhook`);
     setDarkMode(document.documentElement.getAttribute("data-theme") === "dark");
+    fetch("/api/ha-status")
+      .then((r) => r.json())
+      .then(setHa)
+      .catch(() => setHa(null));
   }, []);
 
   function toggleDark() {
@@ -54,19 +76,84 @@ export default function SettingsPage() {
 
       <div className="p-5 rounded-2xl space-y-3 mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
         <h2 className="font-medium">Home Assistant</h2>
+        {ha ? (
+          <div className="space-y-1">
+            <p className="text-sm" style={{ color: ha.reachable ? "var(--green)" : "var(--red)" }}>
+              {ha.reachable ? `Connected to ${ha.url}` : ha.error ?? "Not connected"}
+            </p>
+            <p className="text-sm" style={{ color: ha.listening ? "var(--green)" : "var(--text3)" }}>
+              {ha.listening ? "Listening for Done / Tomorrow / Later taps" : "Not listening for button taps yet"}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm" style={{ color: "var(--text3)" }}>Checking connection…</p>
+        )}
         <p className="text-sm" style={{ color: "var(--text2)" }}>
           The house connection is <code className="text-xs">HA_URL</code> and <code className="text-xs">HA_TOKEN</code> in the Pi <code className="text-xs">.env</code> — one token for everyone.
-          Each person&apos;s notify entity is on People.
+          Sweepy listens for the notification buttons on that connection, so you do not need a Home Assistant automation for Done / Tomorrow / Later.
         </p>
-        <p className="text-sm" style={{ color: "var(--text2)" }}>
-          Point the Done / Tomorrow automation at:
-        </p>
-        <div className="px-3 py-2.5 rounded-xl text-xs font-mono break-all" style={{ background: "var(--surface2)", color: "var(--accent)" }}>
-          {webhookUrl || "http://your-server:3000/api/ha-webhook"}
-        </div>
+        {ha && ha.services.length > 0 && (
+          <div>
+            <p className="text-xs mb-1.5" style={{ color: "var(--text3)" }}>Notify services HA will accept</p>
+            <ul className="space-y-1">
+              {ha.services.map((s) => (
+                <li key={s} className="text-xs font-mono" style={{ color: "var(--text2)" }}>{s}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {ha && ha.people.length > 0 && (
+          <div>
+            <p className="text-xs mb-1.5" style={{ color: "var(--text3)" }}>People</p>
+            <ul className="space-y-1.5">
+              {ha.people.map((p) => (
+                <li key={p.name} className="text-sm">
+                  <span className="font-medium">{p.name}</span>
+                  <span className="text-xs font-mono ml-2" style={{ color: p.ok ? "var(--text2)" : "var(--red)" }}>
+                    {p.target || "—"}
+                    {p.resolved && p.resolved !== p.target ? ` → ${p.resolved}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <p className="text-xs" style={{ color: "var(--text3)" }}>
-          Each person&apos;s webhook token (the key on People) goes in their automation so taps are credited to them.
+          Optional backup webhook if the live listener is down: <span className="font-mono">{webhookUrl || "/api/ha-webhook"}</span>
         </p>
+      </div>
+
+      <div className="p-5 rounded-2xl mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
+        <h2 className="font-medium mb-3">HA log</h2>
+        {!ha || ha.log.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--text3)" }}>Nothing yet. Bell on People and Done / Tomorrow taps show up here.</p>
+        ) : (
+          <ul className="space-y-2">
+            {ha.log.map((row) => (
+              <li key={row.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpenLogId(openLogId === row.id ? null : row.id)}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs font-mono shrink-0 mt-0.5" style={{ color: "var(--text3)" }}>
+                      {format(new Date(row.createdAt), "HH:mm")}
+                    </span>
+                    <span className="text-sm min-w-0" style={{ color: row.ok ? "var(--text)" : "var(--red)" }}>
+                      {row.summary}
+                    </span>
+                  </div>
+                </button>
+                {openLogId === row.id && row.detail && (
+                  <pre className="mt-1.5 ml-10 text-xs font-mono whitespace-pre-wrap break-all px-3 py-2 rounded-xl" style={{ background: "var(--surface2)", color: "var(--text2)" }}>
+                    {row.detail}
+                  </pre>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="p-5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
@@ -74,8 +161,8 @@ export default function SettingsPage() {
         <ul className="space-y-2">
           {[
             "At midnight, due tasks are auto-assigned based on each person's daily capacity and allowed days",
-            "At each person's notify time, one push notification fires per task with Done and Tomorrow buttons",
-            "Tapping Tomorrow moves the task to the next day's queue",
+            "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Later",
+            "Done checks it off. Tomorrow moves it to the next day. Later closes it and pings again in an hour",
             "Tasks can be checked off or deferred in the Today and Upcoming views too",
             "Overflow spills to future days automatically",
           ].map((line) => (

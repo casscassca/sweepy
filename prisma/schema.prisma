@@ -67,6 +67,7 @@ model DailyAssignment {
   order         Int       @default(0)
   completedAt   DateTime?
   completedById String?
+  remindAt      DateTime?
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
@@ -93,4 +94,16 @@ model Settings {
   // Secret used to sign session cookies. Generated once on first use and kept
   // in the DB so it persists across deploys (the data volume) and never lives in git.
   sessionSecret String @default("")
+}
+
+model IntegrationLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  kind      String
+  ok        Boolean
+  userName  String   @default("")
+  summary   String
+  detail    String   @default("")
+
+  @@index([createdAt])
 }

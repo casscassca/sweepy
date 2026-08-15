@@ -2,7 +2,8 @@ import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import path from "path";
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient; prismaRev?: number };
+const PRISMA_REV = 2;
 
 function createClient() {
   const dbUrl = process.env.DATABASE_URL ?? "file:./prisma/dev.db";
@@ -16,6 +17,12 @@ function createClient() {
   return new PrismaClient({ adapter, omit: { user: { passwordHash: true, webhookSecret: true } } } as any);
 }
 
-export const prisma: PrismaClient = globalForPrisma.prisma ?? createClient();
+const cached = globalForPrisma.prisma;
+const stale = globalForPrisma.prismaRev !== PRISMA_REV
+  || (Boolean(cached) && typeof (cached as { integrationLog?: unknown }).integrationLog === "undefined");
+export const prisma: PrismaClient = !cached || stale ? createClient() : cached;
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+  globalForPrisma.prismaRev = PRISMA_REV;
+}

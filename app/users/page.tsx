@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Pencil, Trash2, Plus, KeyRound, RefreshCw, Check, Copy } from "lucide-react";
+import { Pencil, Trash2, Plus, KeyRound, RefreshCw, Check, Copy, Bell } from "lucide-react";
 
 type User = { id: string; name: string; haNotifyTarget: string; dailyCapacity: number; notifyTime: string; color: string; webhookSecret: string; hasPassword: boolean };
 type UserStats = { user: User; weekly: number; monthly: number; yearly: number };
@@ -15,6 +15,8 @@ export default function UsersPage() {
   const [form, setForm] = useState({ name: "", haNotifyTarget: "", dailyCapacity: "6", notifyTime: "08:00", color: COLORS[0], password: "" });
   const [showToken, setShowToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [notifyMsg, setNotifyMsg] = useState<string | null>(null);
+  const [notifyDetail, setNotifyDetail] = useState<string[] | null>(null);
 
   async function load() {
     const [u, s] = await Promise.all([
@@ -59,6 +61,24 @@ export default function UsersPage() {
     load();
   }
 
+  async function notifyNow(user: User) {
+    const res = await fetch("/api/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.id }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.ok) setNotifyMsg(`Sent ${data.sent} notify${data.sent === 1 ? "" : "s"} to ${user.name}`);
+    else setNotifyMsg(data.reason ?? "Notify failed");
+    const attempts = Array.isArray(data.attempts)
+      ? data.attempts.map((a: { taskName: string; service: string; status: number; ok: boolean; url: string }) =>
+          `${a.ok ? "ok" : a.status}  ${a.taskName}  ${a.service}${a.url ? `\n    ${a.url}` : ""}`,
+        )
+      : null;
+    setNotifyDetail(attempts);
+    if (data.ok) setTimeout(() => { setNotifyMsg(null); setNotifyDetail(null); }, 8000);
+  }
+
   function copyToken(token: string) {
     navigator.clipboard?.writeText(token);
     setCopied(true);
@@ -80,10 +100,24 @@ export default function UsersPage() {
           <h1 className="text-2xl font-semibold tracking-tight">People</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>{users.length} household member{users.length !== 1 ? "s" : ""}</p>
         </div>
+        {notifyMsg && (
+          <p className="text-sm shrink-0 max-w-[14rem] truncate" style={{ color: "var(--text2)" }}>{notifyMsg}</p>
+        )}
         <button onClick={startNew} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium text-white shrink-0" style={{ background: "var(--accent)" }}>
           <Plus size={14} /> Add Person
         </button>
       </div>
+
+      {notifyMsg && (
+        <div className="mb-6 p-4 rounded-2xl space-y-2" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
+          <p className="text-sm font-medium">{notifyMsg}</p>
+          {notifyDetail && notifyDetail.length > 0 && (
+            <pre className="text-xs font-mono whitespace-pre-wrap break-all" style={{ color: "var(--text2)" }}>
+              {notifyDetail.join("\n")}
+            </pre>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <div className="mb-6 p-5 rounded-2xl space-y-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
@@ -100,7 +134,7 @@ export default function UsersPage() {
               </div>
               <div>
                 <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>HA notify target</label>
-                <input value={form.haNotifyTarget} onChange={(e) => setForm((f) => ({ ...f, haNotifyTarget: e.target.value }))} placeholder="notify.cassandras_iphone" />
+                <input value={form.haNotifyTarget} onChange={(e) => setForm((f) => ({ ...f, haNotifyTarget: e.target.value }))} placeholder="notify.pixel or notify.mobile_app_pixel" />
               </div>
               <div>
                 <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Notify time</label>
@@ -154,6 +188,7 @@ export default function UsersPage() {
                   </div>
                 </div>
                 <div className="flex gap-1">
+                  <button onClick={() => notifyNow(user)} title="Send today's notifies now" aria-label="Send notify now" className="p-2 rounded-xl" style={{ color: "var(--text3)" }}><Bell size={14} /></button>
                   <button onClick={() => setShowToken(showToken === user.id ? null : user.id)} title="Webhook token" aria-label="Webhook token" className="p-2 rounded-xl" style={{ color: showToken === user.id ? "var(--accent)" : "var(--text3)" }}><KeyRound size={14} /></button>
                   <button onClick={() => startEdit(user)} className="p-2 rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }} aria-label="Edit person"><Pencil size={14} /></button>
                   <button onClick={() => remove(user.id)} className="p-2 rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--red)" }} aria-label="Remove person"><Trash2 size={14} /></button>
@@ -164,7 +199,7 @@ export default function UsersPage() {
               {showToken === user.id && (
                 <div className="px-4 pb-4" style={{ borderTop: "1px solid var(--border)" }}>
                   <p className="text-xs mt-3 mb-1.5" style={{ color: "var(--text3)" }}>
-                    Home Assistant webhook token — put this in {user.name}&apos;s automation so their &quot;Done&quot; / &quot;Defer&quot; taps are credited to them.
+                    Optional backup webhook token for {user.name}. Button taps are handled live from Home Assistant; this is only needed if that listener is down.
                   </p>
                   <div className="flex items-center gap-2 min-w-0">
                     <code className="flex-1 min-w-0 text-xs font-mono px-3 py-2 rounded-lg overflow-x-auto whitespace-nowrap" style={{ background: "var(--surface2)", color: "var(--text2)" }}>
