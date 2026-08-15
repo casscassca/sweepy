@@ -262,10 +262,10 @@ export default function RoomsPage() {
                             )}
                           </div>
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover/task:opacity-100 transition-opacity">
                           <button
                             onClick={() => addToToday(task.id)}
-                            disabled={onToday.has(task.id) || addingId === task.id}
+                            disabled={addingId === task.id}
                             className="p-2 rounded-lg"
                             style={{ color: onToday.has(task.id) ? "var(--green)" : "var(--text3)" }}
                             title={onToday.has(task.id) ? "On today" : "Add to today"}
@@ -273,8 +273,8 @@ export default function RoomsPage() {
                           >
                             {onToday.has(task.id) ? <Check size={14} /> : <Plus size={14} />}
                           </button>
-                          <button onClick={() => setEditingTask({ ...task, roomId: room.id })} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover/task:opacity-100 transition-opacity" style={{ color: "var(--text3)" }} aria-label="Edit task"><Pencil size={13} /></button>
-                          <button onClick={() => deleteTask(task.id)} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover/task:opacity-100 transition-opacity" style={{ color: "var(--red)" }} aria-label="Delete task"><Trash2 size={13} /></button>
+                          <button onClick={() => setEditingTask({ ...task, roomId: room.id })} className="p-2 rounded-lg" style={{ color: "var(--text3)" }} aria-label="Edit task"><Pencil size={13} /></button>
+                          <button onClick={() => deleteTask(task.id)} className="p-2 rounded-lg" style={{ color: "var(--red)" }} aria-label="Delete task"><Trash2 size={13} /></button>
                         </div>
                       </div>
                     )}
