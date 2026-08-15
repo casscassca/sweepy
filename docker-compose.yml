@@ -16,6 +16,7 @@ services:
       - sweepy-data:/app/data
     environment:
       DATABASE_URL: ${DATABASE_URL:-file:/app/data/sweepy.db}
+      TZ: ${TZ:-America/Chicago}
       HA_URL: ${HA_URL:-}
       HA_TOKEN: ${HA_TOKEN:-}
     restart: unless-stopped

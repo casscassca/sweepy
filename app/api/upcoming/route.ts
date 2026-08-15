@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { format, addDays } from "date-fns";
+import { format, addDays, parseISO } from "date-fns";
 import { runDailyAssignment } from "@/lib/scheduler";
 
-export async function GET() {
-  const today = new Date();
-  const days = Array.from({ length: 7 }, (_, i) => format(addDays(today, i), "yyyy-MM-dd"));
+function weekFrom(from: string | null): string[] {
+  const start = from && /^\d{4}-\d{2}-\d{2}$/.test(from)
+    ? from
+    : format(new Date(), "yyyy-MM-dd");
+  const noon = parseISO(`${start}T12:00:00`);
+  return Array.from({ length: 7 }, (_, i) => format(addDays(noon, i), "yyyy-MM-dd"));
+}
 
-  // Auto-assign any future days that have no assignments yet
-  for (const date of days.slice(1)) {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const days = weekFrom(searchParams.get("from"));
+
+  // Fill any empty day in the window, including today.
+  for (const date of days) {
     const count = await prisma.dailyAssignment.count({ where: { date } });
     if (count === 0) {
       await runDailyAssignment(date);

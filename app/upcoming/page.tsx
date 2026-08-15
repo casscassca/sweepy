@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState, type HTMLAttributes } from "react";
-import { format, parseISO, isToday, isTomorrow } from "date-fns";
+import { useEffect, useMemo, useState, type HTMLAttributes, type ReactNode } from "react";
+import { addDays, format, parseISO, isToday, isTomorrow } from "date-fns";
 import {
   DndContext, DragEndEvent, PointerSensor, useSensor, useSensors, closestCenter,
-  DragOverlay, DragStartEvent,
+  DragOverlay, DragStartEvent, useDroppable,
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -160,6 +160,19 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdi
   );
 }
 
+function DayBucket({ date, children }: { date: string; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: date });
+  return (
+    <div
+      ref={setNodeRef}
+      className="min-h-10 rounded-xl"
+      style={{ outline: isOver ? "2px dashed var(--accent)" : undefined, outlineOffset: 4 }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function SortableTaskCard(props: Parameters<typeof TaskCard>[0]) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.assignment.id });
   return (
@@ -195,7 +208,10 @@ function FilterChip({
 }
 
 export default function UpcomingPage() {
-  const [days, setDays] = useState<string[]>([]);
+  const days = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => format(addDays(new Date(), i), "yyyy-MM-dd")),
+    [],
+  );
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [me, setMe] = useState<User | null>(null);
@@ -207,11 +223,10 @@ export default function UpcomingPage() {
   async function load() {
     setLoading(true);
     const [upcomingRes, usersRes, meRes] = await Promise.all([
-      fetch("/api/upcoming").then((r) => r.json()),
+      fetch(`/api/upcoming?from=${days[0]}`).then((r) => r.json()),
       fetch("/api/users").then((r) => r.json()),
       fetch("/api/auth/me").then((r) => r.json()),
     ]);
-    setDays(upcomingRes.days);
     setAssignments(upcomingRes.assignments);
     setUsers(usersRes);
     setMe(meRes.user ?? null);
@@ -329,7 +344,7 @@ export default function UpcomingPage() {
             {days.map((date) => {
               const dayAssignments = visible.filter((a) => a.date === date).sort((a, b) => a.order - b.order);
               const donePct = dayAssignments.length > 0 ? (dayAssignments.filter((a) => a.completedAt).length / dayAssignments.length) * 100 : 0;
-              const isCurrentDay = date === days[0];
+              const isCurrentDay = isToday(parseISO(date));
 
               return (
                 <div key={date}>
@@ -348,7 +363,7 @@ export default function UpcomingPage() {
                   </div>
 
                   <SortableContext items={dayAssignments.map((a) => a.id)} strategy={verticalListSortingStrategy}>
-                    <div className="min-h-10">
+                    <DayBucket date={date}>
                       {dayAssignments.map((a) => (
                         <SortableTaskCard
                           key={a.id}
@@ -366,7 +381,7 @@ export default function UpcomingPage() {
                           Nothing scheduled — drag tasks here
                         </div>
                       )}
-                    </div>
+                    </DayBucket>
                   </SortableContext>
                 </div>
               );

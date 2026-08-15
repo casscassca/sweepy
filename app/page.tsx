@@ -95,7 +95,7 @@ export default function TodayPage() {
 
   async function runAssignment() {
     setRunning(true);
-    await fetch("/api/run-assignments?manual=true", { method: "POST" });
+    await fetch(`/api/run-assignments?manual=true&date=${today}`, { method: "POST" });
     await load(); setRunning(false);
   }
 
