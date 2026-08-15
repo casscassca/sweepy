@@ -26,16 +26,43 @@ function dayLabel(dateStr: string) {
   return format(d, "EEEE, MMM d");
 }
 
-function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdit, dragHandleProps, isDragOverlay }: {
+function PersonMenu({
+  title, users, selectedId, onPick, onClose,
+}: {
+  title: string; users: User[]; selectedId?: string; onPick: (id: string) => void; onClose: () => void;
+}) {
+  return (
+    <div className="absolute left-0 top-full mt-1 z-20 rounded-xl shadow-xl p-1.5 min-w-40" style={{ background: "var(--surface)", border: "1px solid var(--border-hover)" }}>
+      <p className="text-xs px-2 py-1 mb-0.5" style={{ color: "var(--text3)" }}>{title}</p>
+      {users.map((u) => (
+        <button
+          key={u.id}
+          type="button"
+          onClick={() => { onPick(u.id); onClose(); }}
+          className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-black/5"
+          style={{ background: u.id === selectedId ? "var(--accent-dim)" : undefined }}
+        >
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: u.color }} />
+          {u.name}
+        </button>
+      ))}
+      <button type="button" onClick={onClose} className="w-full text-xs px-2 py-1 mt-0.5 rounded-lg" style={{ color: "var(--text3)" }}>Cancel</button>
+    </div>
+  );
+}
+
+function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdit, onReassign, dragHandleProps, isDragOverlay }: {
   assignment: Assignment; users: User[];
   onComplete?: (id: string, by: string) => void;
   onUncomplete?: (id: string) => void;
   onRemove?: (id: string) => void;
   onEdit?: (task: Task) => void;
+  onReassign?: (id: string, userId: string) => void;
   dragHandleProps?: HTMLAttributes<HTMLElement>;
   isDragOverlay?: boolean;
 }) {
   const [showWho, setShowWho] = useState(false);
+  const [showAssign, setShowAssign] = useState(false);
   const done = !!assignment.completedAt;
 
   return (
@@ -54,7 +81,7 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdi
         <GripVertical size={14} />
       </div>
       {onComplete && (
-        <button onClick={() => done ? onUncomplete?.(assignment.id) : setShowWho(true)} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 min-h-11 w-9 flex items-center justify-center -ml-1" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
+        <button onClick={() => { if (done) { onUncomplete?.(assignment.id); } else { setShowAssign(false); setShowWho(true); } }} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 min-h-11 w-9 flex items-center justify-center -ml-1" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
           {done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
         </button>
       )}
@@ -63,8 +90,23 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdi
           {assignment.task.name}
         </span>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: assignment.user.color }} />
-          <span className="text-xs" style={{ color: "var(--text3)" }}>{assignment.user.name}</span>
+          {onReassign ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowWho(false); setShowAssign((v) => !v); }}
+              className="flex items-center gap-1.5 min-h-8 -ml-1 px-1 rounded-lg"
+              style={{ color: "var(--text3)" }}
+              aria-label={`Assigned to ${assignment.user.name}. Change who it's for`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: assignment.user.color }} />
+              <span className="text-xs">{assignment.user.name}</span>
+            </button>
+          ) : (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: assignment.user.color }} />
+              <span className="text-xs" style={{ color: "var(--text3)" }}>{assignment.user.name}</span>
+            </>
+          )}
           <span className="text-xs" style={{ color: "var(--text3)" }}>{assignment.task.room.name}</span>
           <span className="text-xs font-medium px-1.5 py-px rounded-full" style={{ background: DIFF_COLOR[assignment.task.difficulty] + "22", color: DIFF_COLOR[assignment.task.difficulty] }}>
             {DIFF_LABEL[assignment.task.difficulty]}
@@ -98,15 +140,21 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdi
         )}
       </div>
       {showWho && (
-        <div className="absolute right-2 top-full mt-1 z-20 rounded-xl shadow-xl p-1.5 min-w-40" style={{ background: "var(--surface)", border: "1px solid var(--border-hover)" }}>
-          <p className="text-xs px-2 py-1 mb-0.5" style={{ color: "var(--text3)" }}>Who did this?</p>
-          {users.map((u) => (
-            <button key={u.id} onClick={() => { onComplete?.(assignment.id, u.id); setShowWho(false); }} className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-black/5">
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: u.color }} />{u.name}
-            </button>
-          ))}
-          <button onClick={() => setShowWho(false)} className="w-full text-xs px-2 py-1 mt-0.5 rounded-lg" style={{ color: "var(--text3)" }}>Cancel</button>
-        </div>
+        <PersonMenu
+          title="Who did this?"
+          users={users}
+          onPick={(id) => onComplete?.(assignment.id, id)}
+          onClose={() => setShowWho(false)}
+        />
+      )}
+      {showAssign && onReassign && (
+        <PersonMenu
+          title="Assign to"
+          users={users}
+          selectedId={assignment.userId}
+          onPick={(id) => onReassign(assignment.id, id)}
+          onClose={() => setShowAssign(false)}
+        />
       )}
     </div>
   );
@@ -185,6 +233,17 @@ export default function UpcomingPage() {
   async function remove(assignmentId: string) {
     await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
     setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
+  }
+
+  async function reassign(assignmentId: string, userId: string) {
+    const user = users.find((u) => u.id === userId);
+    if (!user) return;
+    setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, userId, user } : a)));
+    await fetch(`/api/assignments/${assignmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
   }
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -299,6 +358,7 @@ export default function UpcomingPage() {
                           onUncomplete={isCurrentDay ? uncomplete : undefined}
                           onRemove={remove}
                           onEdit={setEditingTask}
+                          onReassign={reassign}
                         />
                       ))}
                       {dayAssignments.length === 0 && (
