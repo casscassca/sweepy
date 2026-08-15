@@ -23,30 +23,49 @@ function isAllowedOnDate(allowedDays: string | null, date: Date): boolean {
   return allowed.includes(getDay(date));
 }
 
+/** Keep the earliest open assignment per task; drop later copies. */
+export async function dedupeOpenAssignments() {
+  const open = await prisma.dailyAssignment.findMany({
+    where: { completedAt: null },
+    orderBy: [{ date: "asc" }, { order: "asc" }],
+    select: { id: true, taskId: true },
+  });
+  const seen = new Set<string>();
+  const extra: string[] = [];
+  for (const a of open) {
+    if (seen.has(a.taskId)) extra.push(a.id);
+    else seen.add(a.taskId);
+  }
+  if (extra.length > 0) {
+    await prisma.dailyAssignment.deleteMany({ where: { id: { in: extra } } });
+  }
+  return extra.length;
+}
+
 export async function runDailyAssignment(dateStr?: string) {
   const date = dateStr ?? todayStr();
   const targetDate = new Date(date + "T12:00:00"); // noon to avoid DST edge cases
 
-  const [tasks, users] = await Promise.all([
+  const [tasks, users, existing, openElsewhere] = await Promise.all([
     prisma.task.findMany({
       include: { assignableUsers: { include: { user: true } } },
     }),
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.dailyAssignment.findMany({
+      where: { date },
+      include: { task: { select: { difficulty: true } } },
+    }),
+    prisma.dailyAssignment.findMany({
+      where: { completedAt: null, date: { not: date } },
+      select: { taskId: true },
+    }),
   ]);
 
-  const existing = await prisma.dailyAssignment.findMany({
-    where: { date },
-    select: { taskId: true, completedAt: true },
-  });
-  const alreadyAssignedIds = new Set(existing.map((a: { taskId: string }) => a.taskId));
-  const completedToday = new Set(
-    existing
-      .filter((a: { completedAt: Date | null }) => a.completedAt)
-      .map((a: { taskId: string }) => a.taskId)
-  );
+  const alreadyAssignedIds = new Set(existing.map((a) => a.taskId));
+  const blockedIds = new Set(openElsewhere.map((a) => a.taskId));
 
   const eligible = tasks
-    .filter((t) => !alreadyAssignedIds.has(t.id) && !completedToday.has(t.id))
+    .filter((t) => !alreadyAssignedIds.has(t.id) && !blockedIds.has(t.id))
     .filter((t) => isAllowedOnDate(t.allowedDays, targetDate))
     .map((t) => ({ task: t, daysUntil: daysUntilDue(t.lastDoneAt, t.frequencyDays) }))
     .filter(({ task, daysUntil }) => daysUntil <= earlyWindowDays(task.frequencyDays))
@@ -56,6 +75,10 @@ export async function runDailyAssignment(dateStr?: string) {
 
   const capacityLeft = new Map<string, number>(users.map((u) => [u.id, u.dailyCapacity]));
   const orderCounters = new Map<string, number>(users.map((u) => [u.id, 0]));
+  for (const a of existing) {
+    capacityLeft.set(a.userId, (capacityLeft.get(a.userId) ?? 0) - a.task.difficulty);
+    orderCounters.set(a.userId, (orderCounters.get(a.userId) ?? 0) + 1);
+  }
 
   const toCreate: Array<{ date: string; userId: string; taskId: string; order: number }> = [];
 
