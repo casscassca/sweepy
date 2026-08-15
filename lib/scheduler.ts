@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { haConfig } from "./ha";
 import { format, addDays, differenceInDays, getDay } from "date-fns";
 
 function earlyWindowDays(frequencyDays: number): number {
@@ -97,8 +98,8 @@ export async function sendNotificationsForTime(timeStr: string) {
 
   if (users.length === 0) return;
 
-  const settings = await prisma.settings.findUnique({ where: { id: "singleton" } });
-  if (!settings?.haUrl || !settings?.haToken) return;
+  const ha = haConfig();
+  if (!ha) return;
 
   for (const user of users) {
     const assignments = await prisma.dailyAssignment.findMany({
@@ -113,10 +114,10 @@ export async function sendNotificationsForTime(timeStr: string) {
       const notifyTarget = user.haNotifyTarget.replace("notify.", "");
       const difficulty = ["", "quick", "medium", "big job"][assignment.task.difficulty];
 
-      await fetch(`${settings.haUrl}/api/services/notify/${notifyTarget}`, {
+      await fetch(`${ha.url}/api/services/notify/${notifyTarget}`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${settings.haToken}`,
+          Authorization: `Bearer ${ha.token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

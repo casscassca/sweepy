@@ -27,3 +27,14 @@ Users are separate:
 ```bash
 docker exec -it sweepy node scripts/set-password.js
 ```
+
+## Home Assistant
+
+One house token in the Pi `.env` (see `example.env`):
+
+```
+HA_URL=http://host.docker.internal:8123
+HA_TOKEN=...
+```
+
+Notify entities (`notify.cassandras_iphone`) are set on each person in the app. Webhook tokens for Done / Tomorrow are still per person (the key on People).

@@ -7,17 +7,15 @@ export async function GET() {
     create: { id: "singleton" },
     update: {},
   });
-  // Never expose the session-signing secret to the client.
-  const { sessionSecret, ...safe } = settings;
+  // Never expose the session-signing secret or leftover HA fields to the client.
+  const { sessionSecret, haUrl: _haUrl, haToken: _haToken, ...safe } = settings;
   return NextResponse.json(safe);
 }
 
 export async function PATCH(req: Request) {
   const body = await req.json();
-  // Whitelist writable fields — sessionSecret is managed by the server only.
+  // Whitelist writable fields — sessionSecret and HA credentials are not set here.
   const data: Record<string, unknown> = {};
-  if (typeof body.haUrl === "string") data.haUrl = body.haUrl;
-  if (typeof body.haToken === "string") data.haToken = body.haToken;
   if (typeof body.darkMode === "boolean") data.darkMode = body.darkMode;
 
   const settings = await prisma.settings.upsert({
@@ -25,6 +23,6 @@ export async function PATCH(req: Request) {
     create: { id: "singleton", ...data },
     update: data,
   });
-  const { sessionSecret, ...safe } = settings;
+  const { sessionSecret, haUrl: _haUrl, haToken: _haToken, ...safe } = settings;
   return NextResponse.json(safe);
 }

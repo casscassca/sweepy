@@ -1,19 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Check, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 
 export default function SettingsPage() {
-  const [haUrl, setHaUrl] = useState("");
-  const [haToken, setHaToken] = useState("");
-  const [saved, setSaved] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
-    fetch("/api/settings").then((r) => r.json()).then((s) => {
-      setHaUrl(s.haUrl ?? "");
-      setHaToken(s.haToken ?? "");
-    });
     setWebhookUrl(`${window.location.origin}/api/ha-webhook`);
     setDarkMode(document.documentElement.getAttribute("data-theme") === "dark");
   }, []);
@@ -30,25 +23,13 @@ export default function SettingsPage() {
     }
   }
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    await fetch("/api/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ haUrl, haToken }),
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-
   return (
     <div className="max-w-lg">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>App config & Home Assistant connection</p>
+        <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>Appearance and Home Assistant</p>
       </div>
 
-      {/* Appearance */}
       <div className="p-5 rounded-2xl mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
         <h2 className="font-medium mb-4">Appearance</h2>
         <div className="flex items-center justify-between">
@@ -71,43 +52,23 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Home Assistant */}
-      <form
-        onSubmit={save}
-        className="p-5 rounded-2xl space-y-4 mb-4"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}
-      >
-        <h2 className="font-medium">Home Assistant</h2>
-        <div>
-          <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>HA URL</label>
-          <input value={haUrl} onChange={(e) => setHaUrl(e.target.value)} placeholder="http://homeassistant.local:8123" />
-        </div>
-        <div>
-          <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Long-lived access token</label>
-          <input type="password" value={haToken} onChange={(e) => setHaToken(e.target.value)} placeholder="eyJ0eXAiOiJKV1..." />
-          <p className="text-xs mt-1.5" style={{ color: "var(--text3)" }}>HA → Profile → Long-lived access tokens → Create token</p>
-        </div>
-        <button type="submit" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all" style={{ background: saved ? "#16a34a" : "var(--accent)" }}>
-          {saved && <Check size={14} />}
-          {saved ? "Saved" : "Save settings"}
-        </button>
-      </form>
-
-      {/* Webhook */}
       <div className="p-5 rounded-2xl space-y-3 mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
-        <h2 className="font-medium">Webhook URL</h2>
+        <h2 className="font-medium">Home Assistant</h2>
         <p className="text-sm" style={{ color: "var(--text2)" }}>
-          Point your HA mobile notification action automation to this URL:
+          The house connection is <code className="text-xs">HA_URL</code> and <code className="text-xs">HA_TOKEN</code> in the Pi <code className="text-xs">.env</code> — one token for everyone.
+          Each person&apos;s notify entity is on People.
+        </p>
+        <p className="text-sm" style={{ color: "var(--text2)" }}>
+          Point the Done / Tomorrow automation at:
         </p>
         <div className="px-3 py-2.5 rounded-xl text-xs font-mono break-all" style={{ background: "var(--surface2)", color: "var(--accent)" }}>
           {webhookUrl || "http://your-server:3000/api/ha-webhook"}
         </div>
         <p className="text-xs" style={{ color: "var(--text3)" }}>
-          Handles both <code>MARK_DONE_</code> and <code>DEFER_</code> notification actions.
+          Each person&apos;s webhook token (the key on People) goes in their automation so taps are credited to them.
         </p>
       </div>
 
-      {/* How it works */}
       <div className="p-5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
         <h2 className="font-medium mb-3">How it works</h2>
         <ul className="space-y-2">
