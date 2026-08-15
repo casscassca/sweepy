@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight } from "lucide-react";
+import { format } from "date-fns";
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Check } from "lucide-react";
 import TaskFormFields, { FREQ_OPTIONS, parseTaskForm } from "@/components/TaskFormFields";
 
 type User = { id: string; name: string; color: string };
@@ -47,14 +48,19 @@ export default function RoomsPage() {
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [taskForms, setTaskForms] = useState<Record<string, boolean>>({});
   const [editingTask, setEditingTask] = useState<(Task & { roomId: string }) | null>(null);
+  const [onToday, setOnToday] = useState<Set<string>>(new Set());
+  const [addingId, setAddingId] = useState<string | null>(null);
 
   async function load() {
-    const [r, u] = await Promise.all([
+    const today = format(new Date(), "yyyy-MM-dd");
+    const [r, u, a] = await Promise.all([
       fetch("/api/rooms").then((r) => r.json()),
       fetch("/api/users").then((r) => r.json()),
+      fetch(`/api/assignments?date=${today}&peek=1`).then((r) => r.json()),
     ]);
     setRooms(r);
     setUsers(u);
+    setOnToday(new Set((Array.isArray(a) ? a : []).map((x: { task: { id: string } }) => x.task.id)));
   }
 
   useEffect(() => { load(); }, []);
@@ -110,6 +116,18 @@ export default function RoomsPage() {
   async function deleteTask(id: string) {
     await fetch(`/api/tasks/${id}`, { method: "DELETE" });
     load();
+  }
+
+  async function addToToday(taskId: string) {
+    if (onToday.has(taskId) || addingId) return;
+    setAddingId(taskId);
+    const res = await fetch("/api/assignments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId }),
+    });
+    if (res.ok) setOnToday((prev) => new Set(prev).add(taskId));
+    setAddingId(null);
   }
 
   const isRoomFormOpen = showRoomForm || !!editingRoom;
@@ -244,9 +262,19 @@ export default function RoomsPage() {
                             )}
                           </div>
                         </div>
-                        <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover/task:opacity-100 transition-opacity">
-                          <button onClick={() => setEditingTask({ ...task, roomId: room.id })} className="p-2 rounded-lg" style={{ color: "var(--text3)" }} aria-label="Edit task"><Pencil size={13} /></button>
-                          <button onClick={() => deleteTask(task.id)} className="p-2 rounded-lg" style={{ color: "var(--red)" }} aria-label="Delete task"><Trash2 size={13} /></button>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => addToToday(task.id)}
+                            disabled={onToday.has(task.id) || addingId === task.id}
+                            className="p-2 rounded-lg"
+                            style={{ color: onToday.has(task.id) ? "var(--green)" : "var(--text3)" }}
+                            title={onToday.has(task.id) ? "On today" : "Add to today"}
+                            aria-label={onToday.has(task.id) ? "Already on today" : "Add to today"}
+                          >
+                            {onToday.has(task.id) ? <Check size={14} /> : <Plus size={14} />}
+                          </button>
+                          <button onClick={() => setEditingTask({ ...task, roomId: room.id })} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover/task:opacity-100 transition-opacity" style={{ color: "var(--text3)" }} aria-label="Edit task"><Pencil size={13} /></button>
+                          <button onClick={() => deleteTask(task.id)} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover/task:opacity-100 transition-opacity" style={{ color: "var(--red)" }} aria-label="Delete task"><Trash2 size={13} /></button>
                         </div>
                       </div>
                     )}

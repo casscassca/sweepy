@@ -164,7 +164,7 @@ export default function SettingsPage() {
             "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Later",
             "Done checks it off. Tomorrow moves it to the next day. Later closes it and pings again in an hour",
             "Tasks can be checked off or deferred in the Today and Upcoming views too",
-            "Overflow spills to future days automatically",
+            "A day you pick for a chore stays put. If that day goes over someone's points, extras slide to the next day — auto-picks first",
           ].map((line) => (
             <li key={line} className="flex gap-2.5 text-sm" style={{ color: "var(--text2)" }}>
               <span style={{ color: "var(--accent-light)", marginTop: "2px" }}>·</span>

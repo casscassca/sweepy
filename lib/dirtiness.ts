@@ -3,6 +3,9 @@ import { differenceInDays, subDays } from "date-fns";
 /** 0 = just cleaned, 1 = due, 3 = filthy / never done. */
 export const DIRT_MAX = 3;
 
+/** Hide from Today / Upcoming until at least this dirty (3/10 of the way to due). */
+export const DIRT_SHOW_AT = 0.3;
+
 function parseDate(value: Date | string): Date {
   return typeof value === "string" ? new Date(value) : value;
 }
@@ -15,6 +18,14 @@ export function dirtinessRatio(
   if (!lastDoneAt || frequencyDays <= 0) return DIRT_MAX;
   const daysSince = differenceInDays(asOf, parseDate(lastDoneAt));
   return Math.min(DIRT_MAX, Math.max(0, daysSince / frequencyDays));
+}
+
+export function isDirtyEnough(
+  lastDoneAt: Date | string | null,
+  frequencyDays: number,
+  asOf: Date = new Date(),
+): boolean {
+  return dirtinessRatio(lastDoneAt, frequencyDays, asOf) >= DIRT_SHOW_AT;
 }
 
 export function lastDoneAtFromRatio(ratio: number, frequencyDays: number, asOf: Date = new Date()): Date | null {

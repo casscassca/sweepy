@@ -1,6 +1,7 @@
 import { addDays, addHours, format } from "date-fns";
 import { prisma } from "./prisma";
 import { appendIntegrationLog } from "./integration-log";
+import { holdAssignmentOnDate } from "./scheduler";
 
 export type NotifyActionKind = "done" | "tomorrow" | "later";
 
@@ -77,17 +78,7 @@ export async function applyNotifyAction(opts: {
 
   if (parsed.kind === "tomorrow") {
     const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
-    const exists = await prisma.dailyAssignment.findUnique({
-      where: { date_taskId: { date: tomorrow, taskId: assignment.taskId } },
-    });
-    if (exists) {
-      await prisma.dailyAssignment.delete({ where: { id: assignment.id } });
-    } else {
-      await prisma.dailyAssignment.update({
-        where: { id: assignment.id },
-        data: { date: tomorrow, remindAt: null },
-      });
-    }
+    await holdAssignmentOnDate(assignment.id, tomorrow);
     await appendIntegrationLog({
       kind: "webhook",
       ok: true,

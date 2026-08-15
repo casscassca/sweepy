@@ -68,6 +68,9 @@ model DailyAssignment {
   completedAt   DateTime?
   completedById String?
   remindAt      DateTime?
+  // True when someone put it on this day (drag, Tomorrow). Auto-assign won't move it
+  // unless that day is over capacity.
+  held          Boolean   @default(false)
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
 

@@ -289,6 +289,7 @@ export default function UpcomingPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ date: targetDate }),
     });
+    await load();
   }
 
   const others = users.filter((u) => u.id !== me?.id);

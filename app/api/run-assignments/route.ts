@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dedupeOpenAssignments, runDailyAssignment } from "@/lib/scheduler";
+import { prepareAssignments, runDailyAssignment } from "@/lib/scheduler";
 import { prisma } from "@/lib/prisma";
 import { format } from "date-fns";
 
@@ -9,12 +9,12 @@ export async function POST(req: Request) {
   const date = searchParams.get("date") ?? format(new Date(), "yyyy-MM-dd");
   const isManual = searchParams.get("manual") !== "false";
 
-  await dedupeOpenAssignments();
+  await prepareAssignments(date);
 
   if (isManual) {
-    // Remove all incomplete assignments for this date so we start fresh
+    // Refresh auto-picks only. Chores someone placed on this day stay put.
     await prisma.dailyAssignment.deleteMany({
-      where: { date, completedAt: null },
+      where: { date, completedAt: null, held: false },
     });
   }
 

@@ -1,20 +1,11 @@
 import { prisma } from "./prisma";
 import { haConfig, listHaNotifyCatalog, postNotify, resolveNotifyTarget } from "./ha";
 import { appendIntegrationLog } from "./integration-log";
-import { format, addDays, differenceInDays, getDay } from "date-fns";
-
-function earlyWindowDays(frequencyDays: number): number {
-  return Math.min(7, Math.floor(frequencyDays / 10));
-}
+import { DIRT_SHOW_AT, dirtinessRatio, isDirtyEnough } from "./dirtiness";
+import { addDays, format, getDay, parseISO } from "date-fns";
 
 function todayStr() {
   return format(new Date(), "yyyy-MM-dd");
-}
-
-function daysUntilDue(lastDoneAt: Date | null, frequencyDays: number): number {
-  if (!lastDoneAt) return -999;
-  const dueDate = addDays(lastDoneAt, frequencyDays);
-  return differenceInDays(dueDate, new Date());
 }
 
 // allowedDays is a comma-separated string of day numbers (0=Sun … 6=Sat), or null = any day
@@ -43,9 +34,157 @@ export async function dedupeOpenAssignments() {
   return extra.length;
 }
 
-export async function runDailyAssignment(dateStr?: string) {
-  const date = dateStr ?? todayStr();
+/** Auto-scheduled rows that are still too clean come off the list. Held ones stay. */
+export async function dropCleanUnheldAssignments() {
+  const open = await prisma.dailyAssignment.findMany({
+    where: { completedAt: null, held: false },
+    include: { task: { select: { lastDoneAt: true, frequencyDays: true } } },
+  });
+  const drop = open
+    .filter((a) => !isDirtyEnough(a.task.lastDoneAt, a.task.frequencyDays, new Date(`${a.date}T12:00:00`)))
+    .map((a) => a.id);
+  if (drop.length > 0) {
+    await prisma.dailyAssignment.deleteMany({ where: { id: { in: drop } } });
+  }
+  return drop.length;
+}
+
+/** Unfinished chores from earlier days roll to today instead of vanishing or stacking in the past. */
+export async function rollForwardPastAssignments(today = todayStr()) {
+  const past = await prisma.dailyAssignment.findMany({
+    where: { completedAt: null, date: { lt: today } },
+  });
+  for (const a of past) {
+    const clash = await prisma.dailyAssignment.findUnique({
+      where: { date_taskId: { date: today, taskId: a.taskId } },
+    });
+    if (clash) await prisma.dailyAssignment.delete({ where: { id: a.id } });
+    else await prisma.dailyAssignment.update({ where: { id: a.id }, data: { date: today } });
+  }
+  return past.length;
+}
+
+/**
+ * If someone is over their daily points, extras slide to the next day.
+ * Auto-scheduled rows move first; held rows only move if the day is still stuffed.
+ */
+export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
+  const users = await prisma.user.findMany({ select: { id: true, dailyCapacity: true } });
+  const cap = new Map(users.map((u) => [u.id, u.dailyCapacity]));
+  const start = parseISO(`${fromDate}T12:00:00`);
+
+  for (let i = 0; i < horizon; i++) {
+    const date = format(addDays(start, i), "yyyy-MM-dd");
+    const next = format(addDays(start, i + 1), "yyyy-MM-dd");
+    const open = await prisma.dailyAssignment.findMany({
+      where: { date, completedAt: null },
+      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true } } },
+    });
+
+    const byUser = new Map<string, typeof open>();
+    for (const a of open) {
+      const list = byUser.get(a.userId) ?? [];
+      list.push(a);
+      byUser.set(a.userId, list);
+    }
+
+    for (const [userId, items] of byUser) {
+      const limit = cap.get(userId) ?? 6;
+      const ranked = [...items].sort((a, b) => {
+        if (a.held !== b.held) return a.held ? 1 : -1;
+        return (
+          dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays) -
+          dirtinessRatio(b.task.lastDoneAt, b.task.frequencyDays)
+        );
+      });
+      let points = items.reduce((s, a) => s + a.task.difficulty, 0);
+      let idx = 0;
+      while (points > limit && ranked.length - idx > 1 && idx < ranked.length) {
+        const spill = ranked[idx++];
+        const clash = await prisma.dailyAssignment.findUnique({
+          where: { date_taskId: { date: next, taskId: spill.taskId } },
+        });
+        if (clash) await prisma.dailyAssignment.delete({ where: { id: spill.id } });
+        else await prisma.dailyAssignment.update({ where: { id: spill.id }, data: { date: next } });
+        points -= spill.task.difficulty;
+      }
+    }
+  }
+}
+
+export async function prepareAssignments(notBefore = todayStr()) {
+  const duplicates = await dedupeOpenAssignments();
+  const rolled = await rollForwardPastAssignments(notBefore);
+  const dropped = await dropCleanUnheldAssignments();
+  await enforceCapacity(notBefore);
+  return { duplicates, rolled, dropped };
+}
+
+export async function holdAssignmentOnDate(id: string, date: string) {
+  const current = await prisma.dailyAssignment.findUnique({ where: { id } });
+  if (!current) return null;
+  if (current.date !== date) {
+    const clash = await prisma.dailyAssignment.findUnique({
+      where: { date_taskId: { date, taskId: current.taskId } },
+    });
+    if (clash) {
+      await prisma.dailyAssignment.delete({ where: { id } });
+      await prisma.dailyAssignment.update({ where: { id: clash.id }, data: { held: true, remindAt: null } });
+      await enforceCapacity(date < todayStr() ? todayStr() : date);
+      return clash;
+    }
+  }
+  const assignment = await prisma.dailyAssignment.update({
+    where: { id },
+    data: { date, held: true, remindAt: null },
+  });
+  await enforceCapacity(date < todayStr() ? todayStr() : date);
+  return assignment;
+}
+
+export async function addTaskToDate(taskId: string, date: string, preferredUserId?: string) {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: { assignableUsers: true },
+  });
+  if (!task) return { ok: false as const, status: 404, reason: "task not found" };
+
+  const open = await prisma.dailyAssignment.findFirst({
+    where: { taskId, completedAt: null },
+  });
+  if (open) {
+    const moved = await holdAssignmentOnDate(open.id, date);
+    return { ok: true as const, already: open.date === date, assignment: moved };
+  }
+
+  const existingToday = await prisma.dailyAssignment.findUnique({
+    where: { date_taskId: { date, taskId } },
+  });
+  if (existingToday) return { ok: true as const, already: true, assignment: existingToday };
+
+  const people = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true } });
+  const allowed = task.assignableUsers.length > 0
+    ? task.assignableUsers.map((a) => a.userId)
+    : people.map((u) => u.id);
+  const userId = preferredUserId && allowed.includes(preferredUserId) ? preferredUserId : allowed[0];
+  if (!userId) return { ok: false as const, status: 422, reason: "no people to assign to" };
+
+  const last = await prisma.dailyAssignment.findFirst({
+    where: { date, userId },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+  const created = await prisma.dailyAssignment.create({
+    data: { date, taskId, userId, order: (last?.order ?? -1) + 1, held: true },
+  });
+  await enforceCapacity(date);
+  return { ok: true as const, already: false, assignment: created };
+}
+
+export async function runDailyAssignment(dateStr?: string, householdToday = todayStr()) {
+  const date = dateStr ?? householdToday;
   const targetDate = new Date(date + "T12:00:00"); // noon to avoid DST edge cases
+  await prepareAssignments(householdToday);
 
   const [tasks, users, existing, openElsewhere] = await Promise.all([
     prisma.task.findMany({
@@ -68,9 +207,9 @@ export async function runDailyAssignment(dateStr?: string) {
   const eligible = tasks
     .filter((t) => !alreadyAssignedIds.has(t.id) && !blockedIds.has(t.id))
     .filter((t) => isAllowedOnDate(t.allowedDays, targetDate))
-    .map((t) => ({ task: t, daysUntil: daysUntilDue(t.lastDoneAt, t.frequencyDays) }))
-    .filter(({ task, daysUntil }) => daysUntil <= earlyWindowDays(task.frequencyDays))
-    .sort((a, b) => a.daysUntil - b.daysUntil);
+    .map((t) => ({ task: t, dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, targetDate) }))
+    .filter(({ dirt }) => dirt >= DIRT_SHOW_AT)
+    .sort((a, b) => b.dirt - a.dirt);
 
   if (eligible.length === 0) return { assigned: 0 };
 
