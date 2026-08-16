@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Check } from "lucide-react";
 import TaskFormFields, { FREQ_OPTIONS, parseTaskForm } from "@/components/TaskFormFields";
+import RoomDirtGauge from "@/components/RoomDirtGauge";
+import DirtGauge from "@/components/DirtGauge";
+import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 
 type User = { id: string; name: string; color: string };
 type Task = {
@@ -206,9 +209,10 @@ export default function RoomsPage() {
               className="flex items-center gap-3 px-4 py-3.5 cursor-pointer select-none group"
               onClick={() => setExpanded((e) => ({ ...e, [room.id]: !e[room.id] }))}
             >
-              <span className="text-xl shrink-0">{room.icon}</span>
-              <span className="font-medium flex-1">{room.name}</span>
-              <span className="text-xs mr-1" style={{ color: "var(--text3)" }}>
+              <span className="text-xl w-7 shrink-0 text-center">{room.icon}</span>
+              <RoomDirtGauge tasks={room.tasks} />
+              <span className="font-medium flex-1 min-w-0 truncate">{room.name}</span>
+              <span className="text-xs w-14 shrink-0 text-right" style={{ color: "var(--text3)" }}>
                 {room.tasks.length} {room.tasks.length === 1 ? "task" : "tasks"}
               </span>
               <button
@@ -247,6 +251,11 @@ export default function RoomsPage() {
                       </form>
                     ) : (
                       <div className="flex items-center gap-3 px-4 py-3 group/task">
+                        <span className="w-7 shrink-0" aria-hidden />
+                        <DirtGauge
+                          ratio={dirtinessRatio(task.lastDoneAt, task.frequencyDays)}
+                          title={dirtDetail(task.lastDoneAt, task.frequencyDays)}
+                        />
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium">{task.name}</div>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">

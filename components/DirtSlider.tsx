@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { DIRT_MAX, dirtColor, dirtinessRatio } from "@/lib/dirtiness";
+import DirtGauge from "./DirtGauge";
 
 export default function DirtSlider({
   lastDoneAt,
@@ -18,7 +19,7 @@ export default function DirtSlider({
         <label className="text-xs" style={{ color: "var(--text3)" }} htmlFor="dirt-ratio">
           How dirty is it?
         </label>
-        <span className="w-4 h-4 rounded-full" style={{ background: color }} />
+        <DirtGauge ratio={ratio} size={22} />
       </div>
       <input
         id="dirt-ratio"

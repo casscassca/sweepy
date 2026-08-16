@@ -53,6 +53,22 @@ export function dirtColor(ratio: number, alpha = 0.7): string {
   return `rgba(${r}, ${g}, ${bl}, ${alpha})`;
 }
 
+export function roomDirtiness(
+  tasks: Array<{ lastDoneAt: Date | string | null; frequencyDays: number }>,
+  asOf: Date = new Date(),
+): number {
+  if (tasks.length === 0) return 0;
+  const total = tasks.reduce((sum, t) => sum + dirtinessRatio(t.lastDoneAt, t.frequencyDays, asOf), 0);
+  return total / tasks.length;
+}
+
+export function dirtWord(ratio: number): string {
+  if (ratio < DIRT_SHOW_AT) return "clean";
+  if (ratio < 1) return "getting there";
+  if (ratio < 2) return "due";
+  return "filthy";
+}
+
 export function dirtDetail(lastDoneAt: Date | string | null, frequencyDays: number, asOf: Date = new Date()): string {
   if (!lastDoneAt) return "Never cleaned — treating as filthy";
   const daysSince = differenceInDays(asOf, parseDate(lastDoneAt));

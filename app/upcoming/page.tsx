@@ -8,7 +8,8 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, CheckCircle2, Circle, Pencil, X, RefreshCw } from "lucide-react";
-import { dirtColor, dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
+import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
+import DirtGauge from "@/components/DirtGauge";
 import TaskEditModal from "@/components/TaskEditModal";
 import type { TaskFormTask } from "@/components/TaskFormFields";
 
@@ -112,11 +113,10 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdi
             {DIFF_LABEL[assignment.task.difficulty]}
           </span>
           {!done && (
-            <span
-              className="w-4 h-4 rounded-full shrink-0"
-              style={{ background: dirtColor(dirtinessRatio(assignment.task.lastDoneAt, assignment.task.frequencyDays)) }}
+            <DirtGauge
+              size={22}
+              ratio={dirtinessRatio(assignment.task.lastDoneAt, assignment.task.frequencyDays)}
               title={dirtDetail(assignment.task.lastDoneAt, assignment.task.frequencyDays)}
-              aria-label={dirtDetail(assignment.task.lastDoneAt, assignment.task.frequencyDays)}
             />
           )}
         </div>
