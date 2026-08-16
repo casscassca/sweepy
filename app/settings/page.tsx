@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Moon, ScrollText, Sun } from "lucide-react";
+import { ChevronDown, ChevronRight, Moon, ScrollText, Sun } from "lucide-react";
 import { format } from "date-fns";
 
 type HaPerson = { name: string; target: string; resolved: string | null; ok: boolean; hint: string | null };
@@ -12,6 +12,7 @@ type HaStatus = {
   reachable: boolean;
   listening?: boolean;
   lastEventAt?: string | null;
+  listenError?: string | null;
   error: string | null;
   services: string[];
   entities: string[];
@@ -24,6 +25,9 @@ export default function SettingsPage() {
   const [darkMode, setDarkMode] = useState(false);
   const [ha, setHa] = useState<HaStatus | null>(null);
   const [openLogId, setOpenLogId] = useState<string | null>(null);
+  const [showLog, setShowLog] = useState(false);
+  const [showHaDetails, setShowHaDetails] = useState(false);
+  const [showHow, setShowHow] = useState(false);
 
   useEffect(() => {
     setWebhookUrl(`${window.location.origin}/api/ha-webhook`);
@@ -83,77 +87,102 @@ export default function SettingsPage() {
               {ha.reachable ? `Connected to ${ha.url}` : ha.error ?? "Not connected"}
             </p>
             <p className="text-sm" style={{ color: ha.listening ? "var(--green)" : "var(--text3)" }}>
-              {ha.listening ? "Listening for Done / Tomorrow / Later taps" : "Not listening for button taps yet"}
+              {ha.listening
+                ? "Listening for Done / Tomorrow / Later taps"
+                : ha.listenError ?? "Not listening for button taps yet"}
             </p>
           </div>
         ) : (
           <p className="text-sm" style={{ color: "var(--text3)" }}>Checking connection…</p>
         )}
-        <p className="text-sm" style={{ color: "var(--text2)" }}>
-          The house connection is <code className="text-xs">HA_URL</code> and <code className="text-xs">HA_TOKEN</code> in the Pi <code className="text-xs">.env</code> — one token for everyone.
-          Sweepy listens for the notification buttons on that connection, so you do not need a Home Assistant automation for Done / Tomorrow / Later.
-        </p>
-        {ha && ha.services.length > 0 && (
-          <div>
-            <p className="text-xs mb-1.5" style={{ color: "var(--text3)" }}>Notify services HA will accept</p>
-            <ul className="space-y-1">
-              {ha.services.map((s) => (
-                <li key={s} className="text-xs font-mono" style={{ color: "var(--text2)" }}>{s}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {ha && ha.people.length > 0 && (
-          <div>
-            <p className="text-xs mb-1.5" style={{ color: "var(--text3)" }}>People</p>
-            <ul className="space-y-1.5">
-              {ha.people.map((p) => (
-                <li key={p.name} className="text-sm">
-                  <span className="font-medium">{p.name}</span>
-                  <span className="text-xs font-mono ml-2" style={{ color: p.ok ? "var(--text2)" : "var(--red)" }}>
-                    {p.target || "—"}
-                    {p.resolved && p.resolved !== p.target ? ` → ${p.resolved}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <p className="text-xs" style={{ color: "var(--text3)" }}>
-          Optional backup webhook if the live listener is down: <span className="font-mono">{webhookUrl || "/api/ha-webhook"}</span>
-        </p>
-      </div>
 
-      <div className="p-5 rounded-2xl mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
-        <h2 className="font-medium mb-3">HA log</h2>
-        {!ha || ha.log.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--text3)" }}>Nothing yet. Bell on People and Done / Tomorrow taps show up here.</p>
-        ) : (
-          <ul className="space-y-2">
-            {ha.log.map((row) => (
-              <li key={row.id}>
-                <button
-                  type="button"
-                  onClick={() => setOpenLogId(openLogId === row.id ? null : row.id)}
-                  className="w-full text-left"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="text-xs font-mono shrink-0 mt-0.5" style={{ color: "var(--text3)" }}>
-                      {format(new Date(row.createdAt), "HH:mm")}
-                    </span>
-                    <span className="text-sm min-w-0" style={{ color: row.ok ? "var(--text)" : "var(--red)" }}>
-                      {row.summary}
-                    </span>
-                  </div>
-                </button>
-                {openLogId === row.id && row.detail && (
-                  <pre className="mt-1.5 ml-10 text-xs font-mono whitespace-pre-wrap break-all px-3 py-2 rounded-xl" style={{ background: "var(--surface2)", color: "var(--text2)" }}>
-                    {row.detail}
-                  </pre>
-                )}
+        {ha && ha.people.length > 0 && (
+          <ul className="space-y-1.5 pt-1">
+            {ha.people.map((p) => (
+              <li key={p.name} className="text-sm">
+                <span className="font-medium">{p.name}</span>
+                <span className="text-xs font-mono ml-2" style={{ color: p.ok ? "var(--text2)" : "var(--red)" }}>
+                  {p.target || "—"}
+                  {p.resolved && p.resolved !== p.target ? ` → ${p.resolved}` : ""}
+                </span>
               </li>
             ))}
           </ul>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setShowLog((v) => !v)}
+          className="flex items-center gap-1.5 text-sm font-medium pt-1"
+          style={{ color: "var(--text2)" }}
+        >
+          {showLog ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          HA log
+          {ha && ha.log.length > 0 && (
+            <span className="text-xs font-normal" style={{ color: "var(--text3)" }}>{ha.log.length}</span>
+          )}
+        </button>
+        {showLog && (
+          !ha || ha.log.length === 0 ? (
+            <p className="text-sm" style={{ color: "var(--text3)" }}>Nothing yet. Bell on People and Done / Tomorrow taps show up here.</p>
+          ) : (
+            <ul className="space-y-2">
+              {ha.log.map((row) => (
+                <li key={row.id}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenLogId(openLogId === row.id ? null : row.id)}
+                    className="w-full text-left"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-xs font-mono shrink-0 mt-0.5" style={{ color: "var(--text3)" }}>
+                        {format(new Date(row.createdAt), "HH:mm")}
+                      </span>
+                      <span className="text-sm min-w-0" style={{ color: row.ok ? "var(--text)" : "var(--red)" }}>
+                        {row.summary}
+                      </span>
+                    </div>
+                  </button>
+                  {openLogId === row.id && row.detail && (
+                    <pre className="mt-1.5 ml-10 text-xs font-mono whitespace-pre-wrap break-all px-3 py-2 rounded-xl" style={{ background: "var(--surface2)", color: "var(--text2)" }}>
+                      {row.detail}
+                    </pre>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )
+        )}
+
+        <button
+          type="button"
+          onClick={() => setShowHaDetails((v) => !v)}
+          className="flex items-center gap-1.5 text-sm font-medium"
+          style={{ color: "var(--text2)" }}
+        >
+          {showHaDetails ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          Connection details
+        </button>
+        {showHaDetails && (
+          <div className="space-y-3">
+            <p className="text-sm" style={{ color: "var(--text2)" }}>
+              The house connection is <code className="text-xs">HA_URL</code> and <code className="text-xs">HA_TOKEN</code> in the Pi <code className="text-xs">.env</code> — one token for everyone.
+              Sweepy listens for the notification buttons on that connection, so you do not need a Home Assistant automation for Done / Tomorrow / Later.
+            </p>
+            {ha && ha.services.length > 0 && (
+              <div>
+                <p className="text-xs mb-1.5" style={{ color: "var(--text3)" }}>Notify services HA will accept</p>
+                <ul className="space-y-1">
+                  {ha.services.map((s) => (
+                    <li key={s} className="text-xs font-mono" style={{ color: "var(--text2)" }}>{s}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="text-xs" style={{ color: "var(--text3)" }}>
+              Optional backup webhook if the live listener is down: <span className="font-mono">{webhookUrl || "/api/ha-webhook"}</span>
+            </p>
+          </div>
         )}
       </div>
 
@@ -175,21 +204,30 @@ export default function SettingsPage() {
       </Link>
 
       <div className="p-5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
-        <h2 className="font-medium mb-3">How it works</h2>
-        <ul className="space-y-2">
-          {[
-            "At midnight, due tasks are auto-assigned based on each person's daily capacity and allowed days",
-            "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Later",
-            "Done checks it off. Tomorrow moves it to the next day. Later closes it and pings again in an hour",
-            "Tasks can be checked off or deferred in the Today and Upcoming views too",
-            "A day you pick for a chore stays put. If that day goes over someone's points, extras slide to the next day — auto-picks first",
-          ].map((line) => (
-            <li key={line} className="flex gap-2.5 text-sm" style={{ color: "var(--text2)" }}>
-              <span style={{ color: "var(--accent-light)", marginTop: "2px" }}>·</span>
-              {line}
-            </li>
-          ))}
-        </ul>
+        <button
+          type="button"
+          onClick={() => setShowHow((v) => !v)}
+          className="flex items-center gap-1.5 font-medium w-full text-left"
+        >
+          {showHow ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          How it works
+        </button>
+        {showHow && (
+          <ul className="space-y-2 mt-3">
+            {[
+              "At midnight, due tasks are auto-assigned based on each person's daily capacity and allowed days",
+              "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Later",
+              "Done checks it off. Tomorrow moves it to the next day. Later closes it and pings again in an hour",
+              "Tasks can be checked off or deferred in the Today and Upcoming views too",
+              "A day you pick for a chore stays put. If that day goes over someone's points, extras slide to the next day — auto-picks first",
+            ].map((line) => (
+              <li key={line} className="flex gap-2.5 text-sm" style={{ color: "var(--text2)" }}>
+                <span style={{ color: "var(--accent-light)", marginTop: "2px" }}>·</span>
+                {line}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

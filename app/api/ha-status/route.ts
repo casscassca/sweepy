@@ -51,6 +51,7 @@ export async function GET() {
     reachable: catalog.reachable,
     listening: events.listening,
     lastEventAt: events.lastEventAt,
+    listenError: events.lastError,
     error: catalog.error ?? null,
     services: catalog.services.map((s) => `notify.${s}`),
     entities: catalog.entities,
