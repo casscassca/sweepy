@@ -19,12 +19,13 @@ model Room {
 model Task {
   id            String   @id @default(cuid())
   name          String
-  roomId        String
-  room          Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId        String?
+  room          Room?    @relation(fields: [roomId], references: [id], onDelete: Cascade)
   difficulty    Int      @default(1)
   frequencyDays Int      @default(7)
   allowedDays   String?
   lastDoneAt    DateTime?
+  oneOff        Boolean  @default(false)
   createdAt     DateTime @default(now())
   assignableUsers TaskAssignableUser[]
   assignments     DailyAssignment[]

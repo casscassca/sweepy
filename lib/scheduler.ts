@@ -38,10 +38,10 @@ export async function dedupeOpenAssignments() {
 export async function dropCleanUnheldAssignments() {
   const open = await prisma.dailyAssignment.findMany({
     where: { completedAt: null, held: false },
-    include: { task: { select: { lastDoneAt: true, frequencyDays: true } } },
+    include: { task: { select: { lastDoneAt: true, frequencyDays: true, oneOff: true } } },
   });
   const drop = open
-    .filter((a) => !isDirtyEnough(a.task.lastDoneAt, a.task.frequencyDays, new Date(`${a.date}T12:00:00`)))
+    .filter((a) => !a.task.oneOff && !isDirtyEnough(a.task.lastDoneAt, a.task.frequencyDays, new Date(`${a.date}T12:00:00`)))
     .map((a) => a.id);
   if (drop.length > 0) {
     await prisma.dailyAssignment.deleteMany({ where: { id: { in: drop } } });
@@ -148,6 +148,7 @@ export async function addTaskToDate(taskId: string, date: string, preferredUserI
     include: { assignableUsers: true },
   });
   if (!task) return { ok: false as const, status: 404, reason: "task not found" };
+  if (task.oneOff) return { ok: false as const, status: 400, reason: "one-off" };
 
   const open = await prisma.dailyAssignment.findFirst({
     where: { taskId, completedAt: null },
@@ -181,6 +182,43 @@ export async function addTaskToDate(taskId: string, date: string, preferredUserI
   return { ok: true as const, already: false, assignment: created };
 }
 
+export async function createOneOff(opts: {
+  name: string;
+  userId: string;
+  difficulty: number;
+  date: string;
+}) {
+  const name = opts.name.trim();
+  if (!name) return { ok: false as const, status: 400, reason: "name required" };
+  const user = await prisma.user.findUnique({ where: { id: opts.userId }, select: { id: true } });
+  if (!user) return { ok: false as const, status: 404, reason: "person not found" };
+  const difficulty = Math.min(3, Math.max(1, Math.round(Number(opts.difficulty) || 1)));
+
+  const last = await prisma.dailyAssignment.findFirst({
+    where: { date: opts.date, userId: opts.userId },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+  const task = await prisma.task.create({
+    data: {
+      name,
+      oneOff: true,
+      difficulty,
+      frequencyDays: 1,
+      assignments: {
+        create: {
+          date: opts.date,
+          userId: opts.userId,
+          order: (last?.order ?? -1) + 1,
+          held: true,
+        },
+      },
+    },
+  });
+  await enforceCapacity(opts.date);
+  return { ok: true as const, taskId: task.id };
+}
+
 export async function runDailyAssignment(dateStr?: string, householdToday = todayStr()) {
   const date = dateStr ?? householdToday;
   const targetDate = new Date(date + "T12:00:00"); // noon to avoid DST edge cases
@@ -188,6 +226,7 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
 
   const [tasks, users, existing, openElsewhere] = await Promise.all([
     prisma.task.findMany({
+      where: { oneOff: false },
       include: { assignableUsers: { include: { user: true } } },
     }),
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
@@ -334,7 +373,7 @@ export async function sendNotificationsForUser(
     const difficulty = ["", "quick", "medium", "big job"][assignment.task.difficulty];
     const taskName = assignment.task.name;
     const base = {
-      title: `${assignment.task.room.name}: ${taskName}`,
+      title: assignment.task.room ? `${assignment.task.room.name}: ${taskName}` : taskName,
       message: `${difficulty} · tap an action below`,
     };
     // Short action ids — iOS / companion historically cap identifiers around 32 chars.

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { addTaskToDate, prepareAssignments } from "@/lib/scheduler";
+import { addTaskToDate, createOneOff, prepareAssignments } from "@/lib/scheduler";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { format } from "date-fns";
 
@@ -11,7 +11,10 @@ export async function GET(req: Request) {
   if (searchParams.get("peek") !== "1") await prepareAssignments(date);
 
   const assignments = await prisma.dailyAssignment.findMany({
-    where: { date },
+    where: {
+      date,
+      OR: [{ completedAt: null }, { task: { oneOff: false } }],
+    },
     include: {
       task: { include: { room: true } },
       user: true,
@@ -37,16 +40,31 @@ export async function PATCH(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const { taskId, date } = await req.json().catch(() => ({}));
-  if (typeof taskId !== "string" || !taskId) {
+  const body = await req.json().catch(() => ({}));
+  const day = typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
+    ? body.date
+    : format(new Date(), "yyyy-MM-dd");
+
+  if (body.oneOff) {
+    if (typeof body.name !== "string" || typeof body.userId !== "string") {
+      return NextResponse.json({ ok: false, reason: "name and userId required" }, { status: 400 });
+    }
+    const result = await createOneOff({
+      name: body.name,
+      userId: body.userId,
+      difficulty: Number(body.difficulty) || 1,
+      date: day,
+    });
+    if (!result.ok) return NextResponse.json(result, { status: result.status });
+    return NextResponse.json(result, { status: 201 });
+  }
+
+  if (typeof body.taskId !== "string" || !body.taskId) {
     return NextResponse.json({ ok: false, reason: "taskId required" }, { status: 400 });
   }
   const cookieStore = await cookies();
   const userId = await verifySessionToken(cookieStore.get(COOKIE_NAME)?.value);
-  const day = typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)
-    ? date
-    : format(new Date(), "yyyy-MM-dd");
-  const result = await addTaskToDate(taskId, day, userId ?? undefined);
+  const result = await addTaskToDate(body.taskId, day, userId ?? undefined);
   if (!result.ok) return NextResponse.json(result, { status: result.status });
   return NextResponse.json(result);
 }

@@ -6,10 +6,11 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, Circle, RefreshCw, X } from "lucide-react";
+import { GripVertical, CheckCircle2, Circle, Plus, RefreshCw, X } from "lucide-react";
+import AddToDaySheet from "@/components/AddToDaySheet";
 
 type User = { id: string; name: string; color: string; dailyCapacity: number };
-type Task = { id: string; name: string; difficulty: number; room: { name: string } };
+type Task = { id: string; name: string; difficulty: number; oneOff?: boolean; room: { name: string } | null };
 type Assignment = { id: string; userId: string; order: number; completedAt: string | null; task: Task; user: User };
 
 const DIFF_COLOR = ["", "#a78bfa", "#fb923c", "#f87171"];
@@ -42,7 +43,9 @@ function SortableItem({ assignment, users, onComplete, onUncomplete, onRemove }:
           {assignment.task.name}
         </span>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          <span className="text-xs" style={{ color: "var(--text3)" }}>{assignment.task.room.name}</span>
+          <span className="text-xs" style={{ color: "var(--text3)" }}>
+            {assignment.task.oneOff ? "one-off" : assignment.task.room?.name}
+          </span>
           <span className="text-xs font-medium px-1.5 py-px rounded-full" style={{ background: DIFF_COLOR[assignment.task.difficulty] + "22", color: DIFF_COLOR[assignment.task.difficulty] }}>
             {DIFF_LABEL[assignment.task.difficulty]}
           </span>
@@ -71,7 +74,9 @@ function SortableItem({ assignment, users, onComplete, onUncomplete, onRemove }:
 export default function TodayPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [meId, setMeId] = useState<string | undefined>();
   const [running, setRunning] = useState(false);
+  const [adding, setAdding] = useState(false);
   const today = format(new Date(), "yyyy-MM-dd");
 
   const grouped = users.map((u) => ({
@@ -84,11 +89,14 @@ export default function TodayPage() {
   const pct = total > 0 ? (totalDone / total) * 100 : 0;
 
   async function load() {
-    const [a, u] = await Promise.all([
-      fetch(`/api/assignments?date=${today}`).then((r) => r.json()),
-      fetch("/api/users").then((r) => r.json()),
+    const [a, u, me] = await Promise.all([
+      fetch(`/api/assignments?date=${today}`).then((r) => r.json().catch(() => [])),
+      fetch("/api/users").then((r) => r.json().catch(() => [])),
+      fetch("/api/auth/me").then((r) => r.json().catch(() => ({}))),
     ]);
-    setAssignments(a); setUsers(u);
+    setAssignments(Array.isArray(a) ? a : []);
+    setUsers(Array.isArray(u) ? u : []);
+    setMeId(me.user?.id);
   }
 
   useEffect(() => { load(); }, []);
@@ -147,10 +155,21 @@ export default function TodayPage() {
             </p>
           )}
         </div>
-        <button onClick={runAssignment} disabled={running} className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)", boxShadow: "var(--shadow)" }}>
-          <RefreshCw size={13} className={running ? "spin" : ""} />
-          {total === 0 ? "Assign Tasks" : "Re-assign"}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="flex items-center justify-center w-10 h-10 rounded-xl"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)", boxShadow: "var(--shadow)" }}
+            aria-label="Add to today"
+          >
+            <Plus size={16} />
+          </button>
+          <button onClick={runAssignment} disabled={running} className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)", boxShadow: "var(--shadow)" }}>
+            <RefreshCw size={13} className={running ? "spin" : ""} />
+            {total === 0 ? "Assign Tasks" : "Re-assign"}
+          </button>
+        </div>
       </div>
 
       {total > 0 && (
@@ -189,6 +208,17 @@ export default function TodayPage() {
             ))}
           </div>
         </DndContext>
+      )}
+
+      {adding && (
+        <AddToDaySheet
+          date={today}
+          title="Add to today"
+          users={users}
+          defaultUserId={meId}
+          onClose={() => setAdding(false)}
+          onAdded={() => { setAdding(false); load(); }}
+        />
       )}
     </div>
   );

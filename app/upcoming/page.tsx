@@ -7,14 +7,15 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, Circle, Pencil, X, RefreshCw } from "lucide-react";
+import { GripVertical, CheckCircle2, Circle, Pencil, Plus, X, RefreshCw } from "lucide-react";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 import DirtGauge from "@/components/DirtGauge";
 import TaskEditModal from "@/components/TaskEditModal";
+import AddToDaySheet from "@/components/AddToDaySheet";
 import type { TaskFormTask } from "@/components/TaskFormFields";
 
 type User = { id: string; name: string; color: string };
-type Task = TaskFormTask & { room: { name: string } };
+type Task = TaskFormTask & { room: { name: string } | null; oneOff?: boolean };
 type Assignment = { id: string; userId: string; date: string; order: number; completedAt: string | null; task: Task; user: User };
 
 const DIFF_COLOR = ["", "#a78bfa", "#fb923c", "#f87171"];
@@ -108,11 +109,13 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdi
               <span className="text-xs" style={{ color: "var(--text3)" }}>{assignment.user.name}</span>
             </>
           )}
-          <span className="text-xs" style={{ color: "var(--text3)" }}>{assignment.task.room.name}</span>
+          <span className="text-xs" style={{ color: "var(--text3)" }}>
+            {assignment.task.oneOff ? "one-off" : assignment.task.room?.name}
+          </span>
           <span className="text-xs font-medium px-1.5 py-px rounded-full" style={{ background: DIFF_COLOR[assignment.task.difficulty] + "22", color: DIFF_COLOR[assignment.task.difficulty] }}>
             {DIFF_LABEL[assignment.task.difficulty]}
           </span>
-          {!done && (
+          {!done && !assignment.task.oneOff && (
             <DirtGauge
               size={22}
               ratio={dirtinessRatio(assignment.task.lastDoneAt, assignment.task.frequencyDays)}
@@ -219,16 +222,17 @@ export default function UpcomingPage() {
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [addingDate, setAddingDate] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     const [upcomingRes, usersRes, meRes] = await Promise.all([
-      fetch(`/api/upcoming?from=${days[0]}`).then((r) => r.json()),
-      fetch("/api/users").then((r) => r.json()),
-      fetch("/api/auth/me").then((r) => r.json()),
+      fetch(`/api/upcoming?from=${days[0]}`).then((r) => r.json().catch(() => ({}))),
+      fetch("/api/users").then((r) => r.json().catch(() => [])),
+      fetch("/api/auth/me").then((r) => r.json().catch(() => ({}))),
     ]);
-    setAssignments(upcomingRes.assignments);
-    setUsers(usersRes);
+    setAssignments(Array.isArray(upcomingRes.assignments) ? upcomingRes.assignments : []);
+    setUsers(Array.isArray(usersRes) ? usersRes : []);
     setMe(meRes.user ?? null);
     setLoading(false);
   }
@@ -361,6 +365,15 @@ export default function UpcomingPage() {
                         <div className="h-full rounded-full" style={{ width: `${donePct}%`, background: isCurrentDay ? "var(--accent)" : "var(--green)" }} />
                       </div>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setAddingDate(date)}
+                      className="p-1.5 rounded-lg shrink-0 ml-auto"
+                      style={{ color: "var(--text3)" }}
+                      aria-label={`Add to ${dayLabel(date)}`}
+                    >
+                      <Plus size={16} />
+                    </button>
                   </div>
 
                   <SortableContext items={dayAssignments.map((a) => a.id)} strategy={verticalListSortingStrategy}>
@@ -373,7 +386,7 @@ export default function UpcomingPage() {
                           onComplete={isCurrentDay ? complete : undefined}
                           onUncomplete={isCurrentDay ? uncomplete : undefined}
                           onRemove={remove}
-                          onEdit={setEditingTask}
+                          onEdit={a.task.oneOff ? undefined : setEditingTask}
                           onReassign={reassign}
                         />
                       ))}
@@ -403,6 +416,17 @@ export default function UpcomingPage() {
           users={users}
           onClose={() => setEditingTask(null)}
           onSaved={() => { setEditingTask(null); load(); }}
+        />
+      )}
+
+      {addingDate && (
+        <AddToDaySheet
+          date={addingDate}
+          title={`Add to ${dayLabel(addingDate)}`}
+          users={users}
+          defaultUserId={me?.id}
+          onClose={() => setAddingDate(null)}
+          onAdded={() => { setAddingDate(null); load(); }}
         />
       )}
     </div>

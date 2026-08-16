@@ -15,21 +15,30 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const days = weekFrom(searchParams.get("from"));
 
-  await prepareAssignments(days[0]);
+  try {
+    await prepareAssignments(days[0]);
 
-  // Top up each day with chores that are dirty enough on that day.
-  for (const date of days) {
-    await runDailyAssignment(date, days[0]);
+    // Top up each day with chores that are dirty enough on that day.
+    for (const date of days) {
+      await runDailyAssignment(date, days[0]);
+    }
+
+    const assignments = await prisma.dailyAssignment.findMany({
+      where: {
+        date: { in: days },
+        OR: [{ completedAt: null }, { task: { oneOff: false } }],
+      },
+      include: {
+        task: { include: { room: true, assignableUsers: { include: { user: true } } } },
+        user: true,
+      },
+      orderBy: [{ date: "asc" }, { userId: "asc" }, { order: "asc" }],
+    });
+
+    return NextResponse.json({ days, assignments });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "upcoming failed";
+    console.error("[upcoming]", err);
+    return NextResponse.json({ days, assignments: [], error: message }, { status: 500 });
   }
-
-  const assignments = await prisma.dailyAssignment.findMany({
-    where: { date: { in: days } },
-    include: {
-      task: { include: { room: true, assignableUsers: { include: { user: true } } } },
-      user: true,
-    },
-    orderBy: [{ date: "asc" }, { userId: "asc" }, { order: "asc" }],
-  });
-
-  return NextResponse.json({ days, assignments });
 }

@@ -4,7 +4,16 @@ import { holdAssignmentOnDate } from "@/lib/scheduler";
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const assignment = await prisma.dailyAssignment.findUnique({
+    where: { id },
+    include: { task: { select: { oneOff: true, id: true } } },
+  });
+  if (!assignment) return NextResponse.json({ ok: true });
   await prisma.dailyAssignment.delete({ where: { id } });
+  if (assignment.task.oneOff) {
+    const logs = await prisma.completionLog.count({ where: { taskId: assignment.task.id } });
+    if (logs === 0) await prisma.task.delete({ where: { id: assignment.task.id } });
+  }
   return NextResponse.json({ ok: true });
 }
 

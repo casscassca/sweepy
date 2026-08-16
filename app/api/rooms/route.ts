@@ -6,6 +6,7 @@ export async function GET() {
     orderBy: { order: "asc" },
     include: {
       tasks: {
+        where: { oneOff: false },
         orderBy: { createdAt: "asc" },
         include: { assignableUsers: { include: { user: true } } },
       },
