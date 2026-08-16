@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "dailyTaskLimit" INTEGER NOT NULL DEFAULT 6;

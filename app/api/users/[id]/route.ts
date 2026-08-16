@@ -11,7 +11,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const data: Record<string, unknown> = {};
   if (typeof body.name === "string") data.name = body.name;
   if (typeof body.haNotifyTarget === "string") data.haNotifyTarget = body.haNotifyTarget;
-  if (body.dailyCapacity !== undefined) data.dailyCapacity = Number(body.dailyCapacity);
+  if (body.dailyCapacity !== undefined) {
+    const v = Math.round(Number(body.dailyCapacity));
+    if (Number.isFinite(v)) data.dailyCapacity = Math.min(20, Math.max(1, v));
+  }
+  if (body.dailyTaskLimit !== undefined) {
+    const v = Math.round(Number(body.dailyTaskLimit));
+    if (Number.isFinite(v)) data.dailyTaskLimit = Math.min(20, Math.max(1, v));
+  }
   if (typeof body.notifyTime === "string") data.notifyTime = body.notifyTime;
   if (typeof body.color === "string") data.color = body.color;
 

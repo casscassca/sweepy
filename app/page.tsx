@@ -10,7 +10,7 @@ import { GripVertical, CheckCircle2, Circle, Pin, Plus, RefreshCw, UserCheck, X 
 import AddToDaySheet from "@/components/AddToDaySheet";
 import CompleteAsMenu from "@/components/CompleteAsMenu";
 
-type User = { id: string; name: string; color: string; dailyCapacity: number };
+type User = { id: string; name: string; color: string; dailyCapacity: number; dailyTaskLimit?: number };
 type Task = { id: string; name: string; difficulty: number; oneOff?: boolean; room: { name: string } | null };
 type Assignment = { id: string; userId: string; order: number; completedAt: string | null; pinned?: boolean; task: Task; user: User };
 
@@ -228,7 +228,7 @@ export default function TodayPage() {
                   <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0" style={{ background: user.color + "22", color: user.color }}>{user.name[0]}</span>
                   <span className="font-medium">{user.name}</span>
                   <span className="text-xs ml-auto" style={{ color: "var(--text3)" }}>
-                    {items.filter((i) => i.completedAt).length}/{items.length} · {items.reduce((s, i) => s + i.task.difficulty, 0)} pts
+                    {items.filter((i) => i.completedAt).length}/{items.length} · {items.reduce((s, i) => s + i.task.difficulty, 0)}/{user.dailyCapacity} pts
                   </span>
                 </div>
                 <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>

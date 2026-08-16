@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Pencil, Trash2, Plus, KeyRound, RefreshCw, Check, Copy, Bell, ScrollText } from "lucide-react";
 
-type User = { id: string; name: string; haNotifyTarget: string; dailyCapacity: number; notifyTime: string; color: string; webhookSecret: string; hasPassword: boolean };
+type User = { id: string; name: string; haNotifyTarget: string; dailyCapacity: number; dailyTaskLimit: number; notifyTime: string; color: string; webhookSecret: string; hasPassword: boolean };
 type UserStats = { user: User; weekly: number; monthly: number; yearly: number };
 
 const COLORS = ["#a78bfa", "#f472b6", "#fb923c", "#34d399", "#60a5fa", "#f87171", "#facc15", "#2dd4bf"];
@@ -13,7 +13,7 @@ export default function UsersPage() {
   const [stats, setStats] = useState<UserStats[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
-  const [form, setForm] = useState({ name: "", haNotifyTarget: "", dailyCapacity: "6", notifyTime: "08:00", color: COLORS[0], password: "" });
+  const [form, setForm] = useState({ name: "", haNotifyTarget: "", dailyCapacity: "6", dailyTaskLimit: "6", notifyTime: "08:00", color: COLORS[0], password: "" });
   const [showToken, setShowToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [notifyMsg, setNotifyMsg] = useState<string | null>(null);
@@ -32,13 +32,13 @@ export default function UsersPage() {
 
   function startEdit(user: User) {
     setEditing(user);
-    setForm({ name: user.name, haNotifyTarget: user.haNotifyTarget, dailyCapacity: String(user.dailyCapacity), notifyTime: user.notifyTime, color: user.color, password: "" });
+    setForm({ name: user.name, haNotifyTarget: user.haNotifyTarget, dailyCapacity: String(user.dailyCapacity), dailyTaskLimit: String(user.dailyTaskLimit ?? 6), notifyTime: user.notifyTime, color: user.color, password: "" });
     setShowForm(true);
   }
 
   function startNew() {
     setEditing(null);
-    setForm({ name: "", haNotifyTarget: "", dailyCapacity: "6", notifyTime: "08:00", color: COLORS[users.length % COLORS.length], password: "" });
+    setForm({ name: "", haNotifyTarget: "", dailyCapacity: "6", dailyTaskLimit: "6", notifyTime: "08:00", color: COLORS[users.length % COLORS.length], password: "" });
     setShowForm(true);
   }
 
@@ -46,7 +46,7 @@ export default function UsersPage() {
     e.preventDefault();
     // Only send a password when one was typed (blank = leave unchanged).
     const { password, ...rest } = form;
-    const body: Record<string, unknown> = { ...rest, dailyCapacity: Number(form.dailyCapacity) };
+    const body: Record<string, unknown> = { ...rest, dailyCapacity: Number(form.dailyCapacity), dailyTaskLimit: Number(form.dailyTaskLimit) };
     if (password.trim()) body.password = password;
     if (editing) {
       await fetch(`/api/users/${editing.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -125,14 +125,21 @@ export default function UsersPage() {
           <h2 className="font-medium">{editing ? "Edit person" : "New person"}</h2>
           <form onSubmit={save} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Name</label>
                 <input required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Cassandra" autoFocus />
               </div>
               <div>
-                <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Daily capacity (pts)</label>
+                <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Daily points</label>
                 <input type="number" min={1} max={20} required value={form.dailyCapacity} onChange={(e) => setForm((f) => ({ ...f, dailyCapacity: e.target.value }))} />
               </div>
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Daily tasks</label>
+                <input type="number" min={1} max={20} required value={form.dailyTaskLimit} onChange={(e) => setForm((f) => ({ ...f, dailyTaskLimit: e.target.value }))} />
+              </div>
+              <p className="text-xs sm:col-span-2 -mt-2" style={{ color: "var(--text3)" }}>
+                Auto-assign stops at these. Pins, one-offs, and anything you drag on can go over.
+              </p>
               <div>
                 <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>HA notify target</label>
                 <input value={form.haNotifyTarget} onChange={(e) => setForm((f) => ({ ...f, haNotifyTarget: e.target.value }))} placeholder="notify.pixel or notify.mobile_app_pixel" />
@@ -183,7 +190,7 @@ export default function UsersPage() {
                     )}
                   </p>
                   <div className="flex gap-4 mt-0.5 flex-wrap">
-                    <span className="text-xs" style={{ color: "var(--text3)" }}>{user.dailyCapacity} pts/day</span>
+                    <span className="text-xs" style={{ color: "var(--text3)" }}>{user.dailyTaskLimit} task{user.dailyTaskLimit === 1 ? "" : "s"} · {user.dailyCapacity} pts/day</span>
                     <span className="text-xs" style={{ color: "var(--text3)" }}>notify {user.notifyTime}</span>
                     {user.haNotifyTarget && <span className="text-xs font-mono" style={{ color: "var(--text3)" }}>{user.haNotifyTarget}</span>}
                   </div>

@@ -46,6 +46,7 @@ model User {
   name           String
   haNotifyTarget String   @default("")
   dailyCapacity  Int      @default(6)
+  dailyTaskLimit Int      @default(6)
   notifyTime     String   @default("08:00")
   color          String   @default("#6366f1")
   createdAt      DateTime @default(now())

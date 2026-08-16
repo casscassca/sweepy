@@ -215,11 +215,11 @@ export default function SettingsPage() {
         {showHow && (
           <ul className="space-y-2 mt-3">
             {[
-              "At midnight, due tasks are auto-assigned based on each person's daily capacity and allowed days",
+              "At midnight, due tasks are auto-assigned based on each person's daily task and points caps, plus allowed days",
               "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Later",
               "Done checks it off. Tomorrow moves it to the next day. Later closes it and pings again in an hour",
               "Tasks can be checked off or deferred in the Today and Upcoming views too",
-              "A day you pick for a chore stays put. If that day goes over someone's points, extras slide to the next day — auto-picks first",
+              "A day you pick for a chore stays put. If that day goes over someone's task or points cap, extras slide to the next day — auto-picks first",
             ].map((line) => (
               <li key={line} className="flex gap-2.5 text-sm" style={{ color: "var(--text2)" }}>
                 <span style={{ color: "var(--accent-light)", marginTop: "2px" }}>·</span>

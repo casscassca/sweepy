@@ -13,13 +13,20 @@ export async function GET() {
   return NextResponse.json(safe);
 }
 
+function clampDaily(n: unknown, fallback = 6) {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v)) return fallback;
+  return Math.min(20, Math.max(1, v));
+}
+
 export async function POST(req: Request) {
-  const { name, haNotifyTarget, dailyCapacity, notifyTime, color } = await req.json();
+  const { name, haNotifyTarget, dailyCapacity, dailyTaskLimit, notifyTime, color } = await req.json();
   const user = await prisma.user.create({
     data: {
       name,
       haNotifyTarget: haNotifyTarget ?? "",
-      dailyCapacity: Number(dailyCapacity ?? 6),
+      dailyCapacity: clampDaily(dailyCapacity),
+      dailyTaskLimit: clampDaily(dailyTaskLimit),
       notifyTime: notifyTime ?? "08:00",
       color: color ?? "#6366f1",
       webhookSecret: generateWebhookSecret(),

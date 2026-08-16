@@ -72,13 +72,14 @@ function stayRank(a: { pinned: boolean; held: boolean; task: { oneOff: boolean }
 }
 
 /**
- * If someone is over their daily points, extras slide to the next day.
+ * If someone is over their daily points or task count, extras slide to the next day.
  * Auto-picks leave first, then unpinned one-offs. Pins and manually moved
  * catalog chores stay, so a day can go over capacity on purpose.
  */
 export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
-  const users = await prisma.user.findMany({ select: { id: true, dailyCapacity: true } });
+  const users = await prisma.user.findMany({ select: { id: true, dailyCapacity: true, dailyTaskLimit: true } });
   const cap = new Map(users.map((u) => [u.id, u.dailyCapacity]));
+  const taskCap = new Map(users.map((u) => [u.id, u.dailyTaskLimit]));
   const start = parseISO(`${fromDate}T12:00:00`);
 
   for (let i = 0; i < horizon; i++) {
@@ -98,6 +99,7 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
 
     for (const [userId, items] of byUser) {
       const limit = cap.get(userId) ?? 6;
+      const maxTasks = taskCap.get(userId) ?? 6;
       const ranked = [...items].sort((a, b) => {
         const stay = stayRank(a) - stayRank(b);
         if (stay !== 0) return stay;
@@ -107,8 +109,9 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
         );
       });
       let points = items.reduce((s, a) => s + a.task.difficulty, 0);
+      let count = items.length;
       let idx = 0;
-      while (points > limit && idx < ranked.length) {
+      while ((points > limit || count > maxTasks) && idx < ranked.length) {
         const spill = ranked[idx++];
         if (stayRank(spill) >= 2) break;
         const clash = await prisma.dailyAssignment.findUnique({
@@ -117,6 +120,7 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
         if (clash) await prisma.dailyAssignment.delete({ where: { id: spill.id } });
         else await prisma.dailyAssignment.update({ where: { id: spill.id }, data: { date: next } });
         points -= spill.task.difficulty;
+        count -= 1;
       }
     }
   }
@@ -279,16 +283,25 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
   const eligible = tasks
     .filter((t) => !alreadyAssignedIds.has(t.id) && !blockedIds.has(t.id))
     .filter((t) => isAllowedOnDate(t.allowedDays, targetDate))
-    .map((t) => ({ task: t, dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, targetDate) }))
+    .map((t) => ({
+      task: t,
+      dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, targetDate),
+      exclusive: t.assignableUsers.length === 1,
+    }))
     .filter(({ dirt }) => dirt >= DIRT_SHOW_AT)
-    .sort((a, b) => b.dirt - a.dirt);
+    .sort((a, b) => {
+      if (a.exclusive !== b.exclusive) return a.exclusive ? -1 : 1;
+      return b.dirt - a.dirt;
+    });
 
   if (eligible.length === 0) return { assigned: 0 };
 
   const capacityLeft = new Map<string, number>(users.map((u) => [u.id, u.dailyCapacity]));
+  const slotsLeft = new Map<string, number>(users.map((u) => [u.id, u.dailyTaskLimit]));
   const orderCounters = new Map<string, number>(users.map((u) => [u.id, 0]));
   for (const a of existing) {
     capacityLeft.set(a.userId, (capacityLeft.get(a.userId) ?? 0) - a.task.difficulty);
+    slotsLeft.set(a.userId, (slotsLeft.get(a.userId) ?? 0) - 1);
     orderCounters.set(a.userId, (orderCounters.get(a.userId) ?? 0) + 1);
   }
 
@@ -304,7 +317,9 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
     let bestCapacity = -1;
     for (const uid of assignableUserIds) {
       const cap = capacityLeft.get(uid) ?? 0;
-      if (cap >= task.difficulty && cap > bestCapacity) {
+      const slots = slotsLeft.get(uid) ?? 0;
+      if (slots < 1 || cap < task.difficulty) continue;
+      if (cap > bestCapacity) {
         bestCapacity = cap;
         bestUser = uid;
       }
@@ -313,6 +328,7 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
     if (!bestUser) continue;
 
     capacityLeft.set(bestUser, (capacityLeft.get(bestUser) ?? 0) - task.difficulty);
+    slotsLeft.set(bestUser, (slotsLeft.get(bestUser) ?? 0) - 1);
     const order = orderCounters.get(bestUser) ?? 0;
     orderCounters.set(bestUser, order + 1);
     toCreate.push({ date, userId: bestUser, taskId: task.id, order });
