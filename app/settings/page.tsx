@@ -219,7 +219,7 @@ export default function SettingsPage() {
               "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Yesterday. The bell on People clears their phone first, then resends from today's list",
               "Done checks it off today. Tomorrow moves it to the next day. Yesterday checks it off as yesterday and pulls in the next due chore",
               "Tasks can be checked off or deferred in the Today and Upcoming views too",
-              "A day you pick for a chore stays put. If that day goes over someone's task or points cap, extras slide to the next day — auto-picks first",
+              "Pins, one-offs, and anything you add or move by hand stay on that day even if it goes over someone's cap. Extra auto-picks still slide forward",
             ].map((line) => (
               <li key={line} className="flex gap-2.5 text-sm" style={{ color: "var(--text2)" }}>
                 <span style={{ color: "var(--accent-light)", marginTop: "2px" }}>·</span>

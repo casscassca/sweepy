@@ -64,18 +64,14 @@ export async function rollForwardPastAssignments(today = todayStr()) {
   return past.length;
 }
 
-function stayRank(a: { pinned: boolean; held: boolean; task: { oneOff: boolean; important?: boolean } }) {
-  if (a.pinned) return 4;
-  if (a.held && !a.task.oneOff) return 3;
-  if (a.task.oneOff) return 2;
-  if (a.task.important) return 1;
-  return 0;
+function isManualStay(a: { pinned: boolean; held: boolean; task: { oneOff: boolean } }) {
+  return a.pinned || a.held || a.task.oneOff;
 }
 
 /**
- * If someone is over their daily points or task count, extras slide to the next day.
- * Auto-picks leave first, then unpinned one-offs. Pins and manually moved
- * catalog chores stay, so a day can go over capacity on purpose.
+ * Auto-picks that overflow a person's daily points or task count slide forward.
+ * Pins, one-offs, and anything placed by hand stay put and do not push
+ * other chores off the day — a day can go over capacity on purpose.
  */
 export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
   const users = await prisma.user.findMany({ select: { id: true, dailyCapacity: true, dailyTaskLimit: true } });
@@ -101,20 +97,16 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
     for (const [userId, items] of byUser) {
       const limit = cap.get(userId) ?? 6;
       const maxTasks = taskCap.get(userId) ?? 6;
-      const ranked = [...items].sort((a, b) => {
-        const stay = stayRank(a) - stayRank(b);
-        if (stay !== 0) return stay;
-        return (
-          dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays) -
-          dirtinessRatio(b.task.lastDoneAt, b.task.frequencyDays)
-        );
-      });
-      let points = items.reduce((s, a) => s + a.task.difficulty, 0);
-      let count = items.length;
+      const autos = items.filter((a) => !isManualStay(a));
+      const ranked = [...autos].sort((a, b) => (
+        dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays) -
+        dirtinessRatio(b.task.lastDoneAt, b.task.frequencyDays)
+      ));
+      let points = autos.reduce((s, a) => s + a.task.difficulty, 0);
+      let count = autos.length;
       let idx = 0;
       while ((points > limit || count > maxTasks) && idx < ranked.length) {
         const spill = ranked[idx++];
-        if (stayRank(spill) >= 3) break;
         const clash = await prisma.dailyAssignment.findUnique({
           where: { date_taskId: { date: next, taskId: spill.taskId } },
         });
@@ -173,7 +165,6 @@ export async function holdAssignmentOnDate(id: string, date: string) {
         where: { id: clash.id },
         data: { held: true, remindAt: null, pinned: current.pinned || clash.pinned },
       });
-      await enforceCapacity(date < todayStr() ? todayStr() : date);
       return clash;
     }
   }
@@ -181,7 +172,6 @@ export async function holdAssignmentOnDate(id: string, date: string) {
     where: { id },
     data: { date, held: true, remindAt: null },
   });
-  await enforceCapacity(date < todayStr() ? todayStr() : date);
   return assignment;
 }
 
@@ -221,7 +211,6 @@ export async function addTaskToDate(taskId: string, date: string, preferredUserI
   const created = await prisma.dailyAssignment.create({
     data: { date, taskId, userId, order: (last?.order ?? -1) + 1, held: true },
   });
-  await enforceCapacity(date);
   return { ok: true as const, already: false, assignment: created };
 }
 
@@ -258,7 +247,6 @@ export async function createOneOff(opts: {
       },
     },
   });
-  await enforceCapacity(opts.date);
   return { ok: true as const, taskId: task.id };
 }
 
