@@ -6,9 +6,10 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, Circle, Pin, Plus, RefreshCw, Star, UserCheck, X } from "lucide-react";
+import { GripVertical, CheckCircle2, Circle, Pin, Plus, RefreshCw, Star, UserCheck, Users, X } from "lucide-react";
 import AddToDaySheet from "@/components/AddToDaySheet";
 import CompleteAsMenu from "@/components/CompleteAsMenu";
+import PersonMenu from "@/components/PersonMenu";
 import TaskNote from "@/components/TaskNote";
 
 type User = { id: string; name: string; color: string; dailyCapacity: number; dailyTaskLimit?: number };
@@ -18,15 +19,17 @@ type Assignment = { id: string; userId: string; order: number; completedAt: stri
 const DIFF_COLOR = ["", "#a78bfa", "#fb923c", "#f87171"];
 const DIFF_LABEL = ["", "quick", "medium", "big job"];
 
-function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRemove, onPin }: {
+function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRemove, onPin, onReassign }: {
   assignment: Assignment; users: User[]; meId?: string;
   onComplete: (id: string, by: string, date?: string) => void;
   onUncomplete: (id: string) => void;
   onRemove: (id: string) => void;
   onPin: (id: string, pinned: boolean) => void;
+  onReassign: (id: string, userId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: assignment.id });
   const [showWho, setShowWho] = useState(false);
+  const [showAssign, setShowAssign] = useState(false);
   const done = !!assignment.completedAt;
 
   function markMine() {
@@ -67,7 +70,19 @@ function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRem
         {!done && (
           <button
             type="button"
-            onClick={() => setShowWho(true)}
+            onClick={() => { setShowWho(false); setShowAssign((v) => !v); }}
+            className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+            style={{ color: "var(--text3)" }}
+            title="Give to someone else"
+            aria-label="Give to someone else"
+          >
+            <Users size={16} />
+          </button>
+        )}
+        {!done && (
+          <button
+            type="button"
+            onClick={() => { setShowAssign(false); setShowWho(true); }}
             className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
             style={{ color: "var(--text3)" }}
             title="Done as someone else"
@@ -96,6 +111,15 @@ function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRem
           users={users}
           onPick={(userId, date) => { onComplete(assignment.id, userId, date); setShowWho(false); }}
           onClose={() => setShowWho(false)}
+        />
+      )}
+      {showAssign && (
+        <PersonMenu
+          title="Give to"
+          users={users}
+          selectedId={assignment.userId}
+          onPick={(id) => onReassign(assignment.id, id)}
+          onClose={() => setShowAssign(false)}
         />
       )}
     </div>
@@ -158,6 +182,17 @@ export default function TodayPage() {
     load();
   }
 
+  async function reassign(assignmentId: string, userId: string) {
+    const user = users.find((u) => u.id === userId);
+    if (!user) return;
+    setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, userId, user } : a)));
+    await fetch(`/api/assignments/${assignmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+  }
+
   async function pin(assignmentId: string, pinned: boolean) {
     setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, pinned } : a)));
     await fetch(`/api/assignments/${assignmentId}`, {
@@ -178,10 +213,16 @@ export default function TodayPage() {
 
     const targetUserId = overA.userId;
     const updated = assignments.map((a) => a.id === activeA.id ? { ...a, userId: targetUserId } : a);
-    const reordered: Array<{ id: string; userId: string; order: number }> = [];
+    const reordered: Array<{ id: string; userId: string; order: number; held?: boolean }> = [];
+    const movedPerson = targetUserId !== activeA.userId;
     users.forEach((u) => {
       updated.filter((a) => a.userId === u.id).sort((a, b) => a.order - b.order)
-        .forEach((item, idx) => reordered.push({ id: item.id, userId: u.id, order: idx }));
+        .forEach((item, idx) => reordered.push({
+          id: item.id,
+          userId: u.id,
+          order: idx,
+          ...(movedPerson && item.id === activeA.id ? { held: true } : {}),
+        }));
     });
     setAssignments(updated.map((a) => { const r = reordered.find((x) => x.id === a.id); return r ? { ...a, userId: r.userId, order: r.order } : a; }));
     await fetch("/api/assignments", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignments: reordered }) });
@@ -243,7 +284,7 @@ export default function TodayPage() {
                 </div>
                 <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                   {items.map((a) => (
-                    <SortableItem key={a.id} assignment={a} users={users} meId={meId} onComplete={complete} onUncomplete={uncomplete} onRemove={remove} onPin={pin} />
+                    <SortableItem key={a.id} assignment={a} users={users} meId={meId} onComplete={complete} onUncomplete={uncomplete} onRemove={remove} onPin={pin} onReassign={reassign} />
                   ))}
                 </SortableContext>
                 {items.length === 0 && (

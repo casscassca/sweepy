@@ -234,9 +234,9 @@ export default function UsersPage() {
                 <div className="px-4 pb-4" style={{ borderTop: "1px solid var(--border)" }}>
                   <div className="grid grid-cols-3 gap-2 pt-3">
                     {[
-                      { label: "This week", value: userStats.weekly },
-                      { label: "This month", value: userStats.monthly },
-                      { label: "This year", value: userStats.yearly },
+                      { label: "pts this week", value: userStats.weekly },
+                      { label: "pts this month", value: userStats.monthly },
+                      { label: "pts this year", value: userStats.yearly },
                     ].map(({ label, value }) => (
                       <div key={label} className="text-center py-2.5 px-2 rounded-xl" style={{ background: "var(--surface2)" }}>
                         <div className="text-xl font-semibold" style={{ color: user.color }}>{value}</div>

@@ -23,7 +23,7 @@ export default function CompleteAsMenu({
       className="absolute right-2 top-full mt-1 z-20 rounded-xl shadow-xl p-2 min-w-44"
       style={{ background: "var(--surface)", border: "1px solid var(--border-hover)" }}
     >
-      <p className="text-xs px-2 py-1 mb-0.5" style={{ color: "var(--text3)" }}>Done as</p>
+      <p className="text-xs px-2 py-1 mb-0.5" style={{ color: "var(--text3)" }}>Mark done as</p>
       <label className="block px-2 mb-2">
         <span className="sr-only">Completion date</span>
         <input

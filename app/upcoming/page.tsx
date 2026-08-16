@@ -13,6 +13,7 @@ import DirtGauge from "@/components/DirtGauge";
 import TaskEditModal from "@/components/TaskEditModal";
 import AddToDaySheet from "@/components/AddToDaySheet";
 import CompleteAsMenu from "@/components/CompleteAsMenu";
+import PersonMenu from "@/components/PersonMenu";
 import TaskNote from "@/components/TaskNote";
 import type { TaskFormTask } from "@/components/TaskFormFields";
 
@@ -30,30 +31,6 @@ function dayLabel(dateStr: string) {
   return format(d, "EEEE, MMM d");
 }
 
-function PersonMenu({
-  title, users, selectedId, onPick, onClose,
-}: {
-  title: string; users: User[]; selectedId?: string; onPick: (id: string) => void; onClose: () => void;
-}) {
-  return (
-    <div className="absolute left-0 top-full mt-1 z-20 rounded-xl shadow-xl p-1.5 min-w-40" style={{ background: "var(--surface)", border: "1px solid var(--border-hover)" }}>
-      <p className="text-xs px-2 py-1 mb-0.5" style={{ color: "var(--text3)" }}>{title}</p>
-      {users.map((u) => (
-        <button
-          key={u.id}
-          type="button"
-          onClick={() => { onPick(u.id); onClose(); }}
-          className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-black/5"
-          style={{ background: u.id === selectedId ? "var(--accent-dim)" : undefined }}
-        >
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: u.color }} />
-          {u.name}
-        </button>
-      ))}
-      <button type="button" onClick={onClose} className="w-full text-xs px-2 py-1 mt-0.5 rounded-lg" style={{ color: "var(--text3)" }}>Cancel</button>
-    </div>
-  );
-}
 
 function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove, onEdit, onReassign, onPin, dragHandleProps, isDragOverlay }: {
   assignment: Assignment; users: User[]; meId?: string;
@@ -109,7 +86,8 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
               onClick={(e) => { e.stopPropagation(); setShowWho(false); setShowAssign((v) => !v); }}
               className="flex items-center gap-1.5 min-h-8 -ml-1 px-1 rounded-lg"
               style={{ color: "var(--text3)" }}
-              aria-label={`Assigned to ${assignment.user.name}. Change who it's for`}
+              title="Give to someone else — does not mark done"
+              aria-label={`Assigned to ${assignment.user.name}. Give to someone else`}
             >
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: assignment.user.color }} />
               <span className="text-xs">{assignment.user.name}</span>
@@ -188,7 +166,7 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
       )}
       {showAssign && onReassign && (
         <PersonMenu
-          title="Assign to"
+          title="Give to"
           users={users}
           selectedId={assignment.userId}
           onPick={(id) => onReassign(assignment.id, id)}

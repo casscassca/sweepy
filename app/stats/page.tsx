@@ -21,7 +21,7 @@ export default function StatsPage() {
     <div>
       <div className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">Stats</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>Completions per person over time</p>
+          <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>Points per person over time · quick 1 · medium 2 · big job 3</p>
       </div>
 
       {stats.length === 0 ? (
@@ -50,15 +50,15 @@ export default function StatsPage() {
                   className="text-xs px-2 py-0.5 rounded-full ml-auto"
                   style={{ background: s.user.color + "22", color: s.user.color }}
                 >
-                  {s.yearly} this year
+                  {s.yearly} pts this year
                 </span>
               </div>
 
               <div className="grid grid-cols-3 gap-3 mb-5">
                 {[
-                  { label: "This week", value: s.weekly },
-                  { label: "This month", value: s.monthly },
-                  { label: "This year", value: s.yearly },
+                  { label: "pts this week", value: s.weekly },
+                  { label: "pts this month", value: s.monthly },
+                  { label: "pts this year", value: s.yearly },
                 ].map(({ label, value }) => (
                   <div
                     key={label}

@@ -46,7 +46,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const assignment = await prisma.dailyAssignment.update({
     where: { id },
     data: {
-      ...(userId !== undefined && { userId }),
+      ...(typeof userId === "string" && { userId, held: true }),
       ...(order !== undefined && { order }),
     },
   });

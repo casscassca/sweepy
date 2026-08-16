@@ -31,8 +31,11 @@ export async function PATCH(req: Request) {
   // assignments: Array<{ id: string, userId: string, order: number }>
 
   await Promise.all(
-    assignments.map(({ id, userId, order }: { id: string; userId: string; order: number }) =>
-      prisma.dailyAssignment.update({ where: { id }, data: { userId, order } })
+    assignments.map(({ id, userId, order, held }: { id: string; userId: string; order: number; held?: boolean }) =>
+      prisma.dailyAssignment.update({
+        where: { id },
+        data: { userId, order, ...(held === true && { held: true }) },
+      })
     )
   );
 

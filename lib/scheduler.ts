@@ -538,26 +538,71 @@ export async function sendNotificationsForUser(
   return { ok: errors.length === 0, sent, cleared, reason: errors[0] ?? resolved.hint, errors, attempts };
 }
 
-/** After a slot frees up, top up today and ping any newly assigned chores. */
+/** If this person is still under today's cap, add the next due chore and ping them. */
 export async function fillUserTodayAndNotify(userId: string) {
   const date = todayStr();
-  const before = new Set(
-    (await prisma.dailyAssignment.findMany({
-      where: { userId, date, completedAt: null },
-      select: { id: true },
-    })).map((a) => a.id),
-  );
-  await runDailyAssignment(date);
-  const added = (
-    await prisma.dailyAssignment.findMany({
-      where: { userId, date, completedAt: null },
-      select: { id: true },
-    })
-  ).map((a) => a.id).filter((id) => !before.has(id));
-  if (added.length > 0) {
-    await sendNotificationsForUser(userId, date, added);
-  }
-  return added.length;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, dailyCapacity: true, dailyTaskLimit: true },
+  });
+  if (!user) return 0;
+
+  const open = await prisma.dailyAssignment.findMany({
+    where: { userId, date, completedAt: null },
+    include: { task: { select: { difficulty: true } } },
+  });
+  const points = open.reduce((s, a) => s + a.task.difficulty, 0);
+  if (open.length >= user.dailyTaskLimit || points >= user.dailyCapacity) return 0;
+
+  const addedId = await assignNextForUser(user.id, date, user.dailyCapacity - points);
+  if (!addedId) return 0;
+  await sendNotificationsForUser(userId, date, [addedId]);
+  return 1;
+}
+
+async function assignNextForUser(userId: string, date: string, pointsLeft: number) {
+  const targetDate = new Date(`${date}T12:00:00`);
+  const [tasks, existing, openElsewhere] = await Promise.all([
+    prisma.task.findMany({
+      where: { oneOff: false },
+      include: { assignableUsers: true },
+    }),
+    prisma.dailyAssignment.findMany({
+      where: { date },
+      select: { taskId: true, userId: true, order: true },
+    }),
+    prisma.dailyAssignment.findMany({
+      where: { completedAt: null, date: { not: date } },
+      select: { taskId: true },
+    }),
+  ]);
+  const taken = new Set(existing.map((a) => a.taskId));
+  const blocked = new Set(openElsewhere.map((a) => a.taskId));
+  const lastOrder = existing
+    .filter((a) => a.userId === userId)
+    .reduce((max, a) => Math.max(max, a.order), -1);
+
+  const next = tasks
+    .filter((t) => !taken.has(t.id) && !blocked.has(t.id))
+    .filter((t) => isAllowedOnDate(t.allowedDays, targetDate))
+    .filter((t) => t.assignableUsers.length === 0 || t.assignableUsers.some((au) => au.userId === userId))
+    .map((t) => ({
+      task: t,
+      dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, targetDate),
+      exclusive: t.assignableUsers.length === 1,
+    }))
+    .filter(({ dirt, task }) => dirt >= DIRT_SHOW_AT && task.difficulty <= pointsLeft)
+    .sort((a, b) => {
+      if (a.task.important !== b.task.important) return a.task.important ? -1 : 1;
+      if (a.exclusive !== b.exclusive) return a.exclusive ? -1 : 1;
+      return b.dirt - a.dirt;
+    })[0];
+
+  if (!next) return null;
+  const created = await prisma.dailyAssignment.create({
+    data: { date, userId, taskId: next.task.id, order: lastOrder + 1 },
+  });
+  return created.id;
 }
 
 export async function sendDueReminders() {
