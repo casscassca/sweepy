@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Moon, Sun } from "lucide-react";
+import Link from "next/link";
+import { Moon, ScrollText, Sun } from "lucide-react";
 import { format } from "date-fns";
 
 type HaPerson = { name: string; target: string; resolved: string | null; ok: boolean; hint: string | null };
@@ -155,6 +156,23 @@ export default function SettingsPage() {
           </ul>
         )}
       </div>
+
+      <Link
+        href="/history"
+        className="flex items-center gap-3 p-5 rounded-2xl mb-4"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}
+      >
+        <span
+          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: "var(--accent-dim)", color: "var(--accent)" }}
+        >
+          <ScrollText size={16} />
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium">Completion history</p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>A timeline of everything that’s been checked off</p>
+        </div>
+      </Link>
 
       <div className="p-5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
         <h2 className="font-medium mb-3">How it works</h2>
