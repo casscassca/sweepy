@@ -6,12 +6,13 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, Circle, Pin, Plus, RefreshCw, UserCheck, X } from "lucide-react";
+import { GripVertical, CheckCircle2, Circle, Pin, Plus, RefreshCw, Star, UserCheck, X } from "lucide-react";
 import AddToDaySheet from "@/components/AddToDaySheet";
 import CompleteAsMenu from "@/components/CompleteAsMenu";
+import TaskNote from "@/components/TaskNote";
 
 type User = { id: string; name: string; color: string; dailyCapacity: number; dailyTaskLimit?: number };
-type Task = { id: string; name: string; difficulty: number; oneOff?: boolean; room: { name: string } | null };
+type Task = { id: string; name: string; difficulty: number; oneOff?: boolean; important?: boolean; notes?: string; room: { name: string } | null };
 type Assignment = { id: string; userId: string; order: number; completedAt: string | null; pinned?: boolean; task: Task; user: User };
 
 const DIFF_COLOR = ["", "#a78bfa", "#fb923c", "#f87171"];
@@ -46,7 +47,10 @@ function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRem
         {done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
       </button>
       <div className="flex-1 min-w-0">
-        <span className="text-sm" style={{ opacity: done ? 0.35 : 1, textDecoration: done ? "line-through" : "none" }}>
+        <span className="text-sm inline-flex items-center gap-1.5" style={{ opacity: done ? 0.35 : 1, textDecoration: done ? "line-through" : "none" }}>
+          {assignment.task.important && (
+            <Star size={12} fill="currentColor" className="shrink-0" style={{ color: "var(--accent)", textDecoration: "none" }} />
+          )}
           {assignment.task.name}
         </span>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -57,6 +61,7 @@ function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRem
             {DIFF_LABEL[assignment.task.difficulty]}
           </span>
         </div>
+        {!done && <TaskNote notes={assignment.task.notes} />}
       </div>
       <div className="flex items-center shrink-0">
         {!done && (
@@ -107,7 +112,12 @@ export default function TodayPage() {
 
   const grouped = users.map((u) => ({
     user: u,
-    items: assignments.filter((a) => a.userId === u.id).sort((a, b) => a.order - b.order),
+    items: assignments.filter((a) => a.userId === u.id).sort((a, b) => {
+      const aImp = !a.completedAt && a.task.important ? 1 : 0;
+      const bImp = !b.completedAt && b.task.important ? 1 : 0;
+      if (aImp !== bImp) return bImp - aImp;
+      return a.order - b.order;
+    }),
   }));
 
   const totalDone = assignments.filter((a) => a.completedAt).length;

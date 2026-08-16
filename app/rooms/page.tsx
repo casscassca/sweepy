@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Check } from "lucide-react";
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Check, Star } from "lucide-react";
 import TaskFormFields, { FREQ_OPTIONS, parseTaskForm } from "@/components/TaskFormFields";
 import RoomDirtGauge from "@/components/RoomDirtGauge";
 import DirtGauge from "@/components/DirtGauge";
@@ -15,6 +15,8 @@ type Task = {
   frequencyDays: number;
   lastDoneAt: string | null;
   allowedDays: string | null;
+  important?: boolean;
+  notes?: string;
   assignableUsers: { user: User }[];
 };
 type Room = { id: string; name: string; icon: string; tasks: Task[] };
@@ -257,10 +259,18 @@ export default function RoomsPage() {
                           title={dirtDetail(task.lastDoneAt, task.frequencyDays)}
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium">{task.name}</div>
+                          <div className="text-sm font-medium inline-flex items-center gap-1.5">
+                            {task.important && (
+                              <Star size={12} fill="currentColor" className="shrink-0" style={{ color: "var(--accent)" }} />
+                            )}
+                            {task.name}
+                          </div>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <DiffBadge n={task.difficulty} />
                             <span className="text-xs" style={{ color: "var(--text3)" }}>{freqLabel(task.frequencyDays)}</span>
+                            {task.notes?.trim() && (
+                              <span className="text-xs" style={{ color: "var(--text3)" }}>note</span>
+                            )}
                             {task.allowedDays && (
                               <span className="text-xs" style={{ color: "var(--text3)" }}>{formatAllowedDays(task.allowedDays)}</span>
                             )}

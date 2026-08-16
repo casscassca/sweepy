@@ -7,12 +7,13 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, Circle, Pencil, Pin, Plus, UserCheck, X, RefreshCw } from "lucide-react";
+import { GripVertical, CheckCircle2, Circle, Pencil, Pin, Plus, Star, UserCheck, X, RefreshCw } from "lucide-react";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 import DirtGauge from "@/components/DirtGauge";
 import TaskEditModal from "@/components/TaskEditModal";
 import AddToDaySheet from "@/components/AddToDaySheet";
 import CompleteAsMenu from "@/components/CompleteAsMenu";
+import TaskNote from "@/components/TaskNote";
 import type { TaskFormTask } from "@/components/TaskFormFields";
 
 type User = { id: string; name: string; color: string };
@@ -95,7 +96,10 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
         </button>
       )}
       <div className="flex-1 min-w-0">
-        <span className="text-sm" style={{ opacity: done ? 0.35 : 1, textDecoration: done ? "line-through" : "none" }}>
+        <span className="text-sm inline-flex items-center gap-1.5" style={{ opacity: done ? 0.35 : 1, textDecoration: done ? "line-through" : "none" }}>
+          {assignment.task.important && (
+            <Star size={12} fill="currentColor" className="shrink-0" style={{ color: "var(--accent)", textDecoration: "none" }} />
+          )}
           {assignment.task.name}
         </span>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -130,6 +134,7 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
             />
           )}
         </div>
+        {!done && <TaskNote notes={assignment.task.notes} />}
       </div>
       <div className="flex items-center shrink-0">
         {onComplete && !done && (
@@ -387,7 +392,12 @@ export default function UpcomingPage() {
         >
           <div className="space-y-6">
             {days.map((date) => {
-              const dayAssignments = visible.filter((a) => a.date === date).sort((a, b) => a.order - b.order);
+              const dayAssignments = visible.filter((a) => a.date === date).sort((a, b) => {
+                const aImp = !a.completedAt && a.task.important ? 1 : 0;
+                const bImp = !b.completedAt && b.task.important ? 1 : 0;
+                if (aImp !== bImp) return bImp - aImp;
+                return a.order - b.order;
+              });
               const donePct = dayAssignments.length > 0 ? (dayAssignments.filter((a) => a.completedAt).length / dayAssignments.length) * 100 : 0;
               const isCurrentDay = isToday(parseISO(date));
 

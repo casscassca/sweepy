@@ -26,6 +26,8 @@ model Task {
   allowedDays   String?
   lastDoneAt    DateTime?
   oneOff        Boolean  @default(false)
+  important     Boolean  @default(false)
+  notes         String   @default("")
   createdAt     DateTime @default(now())
   assignableUsers TaskAssignableUser[]
   assignments     DailyAssignment[]

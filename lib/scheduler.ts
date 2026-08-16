@@ -64,10 +64,11 @@ export async function rollForwardPastAssignments(today = todayStr()) {
   return past.length;
 }
 
-function stayRank(a: { pinned: boolean; held: boolean; task: { oneOff: boolean } }) {
-  if (a.pinned) return 3;
-  if (a.held && !a.task.oneOff) return 2;
-  if (a.task.oneOff) return 1;
+function stayRank(a: { pinned: boolean; held: boolean; task: { oneOff: boolean; important?: boolean } }) {
+  if (a.pinned) return 4;
+  if (a.held && !a.task.oneOff) return 3;
+  if (a.task.oneOff) return 2;
+  if (a.task.important) return 1;
   return 0;
 }
 
@@ -87,7 +88,7 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
     const next = format(addDays(start, i + 1), "yyyy-MM-dd");
     const open = await prisma.dailyAssignment.findMany({
       where: { date, completedAt: null },
-      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, oneOff: true } } },
+      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, oneOff: true, important: true } } },
     });
 
     const byUser = new Map<string, typeof open>();
@@ -113,7 +114,7 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
       let idx = 0;
       while ((points > limit || count > maxTasks) && idx < ranked.length) {
         const spill = ranked[idx++];
-        if (stayRank(spill) >= 2) break;
+        if (stayRank(spill) >= 3) break;
         const clash = await prisma.dailyAssignment.findUnique({
           where: { date_taskId: { date: next, taskId: spill.taskId } },
         });
@@ -126,8 +127,12 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
   }
 }
 
-/** Wipe unpinned catalog rows from today forward, then refill around pins and one-offs. */
-export async function reshuffleFrom(fromDate = todayStr(), horizon = 21) {
+/** Wipe auto catalog rows from today forward, then refill around what should stay. */
+export async function reshuffleFrom(
+  fromDate = todayStr(),
+  horizon = 21,
+  opts?: { keepHeld?: boolean },
+) {
   await prepareAssignments(fromDate);
   const start = parseISO(`${fromDate}T12:00:00`);
   const days = Array.from({ length: horizon }, (_, i) => format(addDays(start, i), "yyyy-MM-dd"));
@@ -136,6 +141,7 @@ export async function reshuffleFrom(fromDate = todayStr(), horizon = 21) {
       date: { in: days },
       completedAt: null,
       pinned: false,
+      ...(opts?.keepHeld ? { held: false } : {}),
       task: { oneOff: false },
     },
   });
@@ -287,9 +293,11 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
       task: t,
       dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, targetDate),
       exclusive: t.assignableUsers.length === 1,
+      important: t.important,
     }))
     .filter(({ dirt }) => dirt >= DIRT_SHOW_AT)
     .sort((a, b) => {
+      if (a.important !== b.important) return a.important ? -1 : 1;
       if (a.exclusive !== b.exclusive) return a.exclusive ? -1 : 1;
       return b.dirt - a.dirt;
     });

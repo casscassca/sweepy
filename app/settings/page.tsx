@@ -215,7 +215,7 @@ export default function SettingsPage() {
         {showHow && (
           <ul className="space-y-2 mt-3">
             {[
-              "At midnight, due tasks are auto-assigned based on each person's daily task and points caps, plus allowed days",
+              "At midnight, auto-picks are refreshed for the next few weeks so dirtier and important chores float up. Pins, things you moved by hand, and one-offs stay put",
               "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Later",
               "Done checks it off. Tomorrow moves it to the next day. Later closes it and pings again in an hour",
               "Tasks can be checked off or deferred in the Today and Upcoming views too",

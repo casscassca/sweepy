@@ -1,4 +1,6 @@
 "use client";
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import DirtSlider from "@/components/DirtSlider";
 import { lastDoneAtFromRatio } from "@/lib/dirtiness";
 
@@ -23,6 +25,8 @@ export type TaskFormTask = {
   frequencyDays: number;
   lastDoneAt: string | null;
   allowedDays: string | null;
+  important?: boolean;
+  notes?: string;
   assignableUsers: { user: TaskFormUser }[];
 };
 
@@ -37,6 +41,8 @@ export function parseTaskForm(form: HTMLFormElement) {
   const allowedDays = checkedDays.length === 7 || checkedDays.length === 0 ? null : checkedDays.join(",");
   const dirtRatio = Number((form.elements.namedItem("dirtRatio") as HTMLInputElement).value);
   const lastDone = lastDoneAtFromRatio(dirtRatio, frequencyDays);
+  const important = (form.elements.namedItem("important") as HTMLInputElement)?.checked ?? false;
+  const notes = ((form.elements.namedItem("notes") as HTMLTextAreaElement)?.value ?? "").trim();
   return {
     name,
     difficulty,
@@ -44,6 +50,8 @@ export function parseTaskForm(form: HTMLFormElement) {
     allowedDays,
     assignableUserIds: selected,
     lastDoneAt: lastDone ? lastDone.toISOString() : null,
+    important,
+    notes,
   };
 }
 
@@ -55,6 +63,8 @@ export default function TaskFormFields({
   users: TaskFormUser[];
 }) {
   const activeDays = task?.allowedDays ? task.allowedDays.split(",").map(Number) : null;
+  const [notesOpen, setNotesOpen] = useState(false);
+  const hasNotes = Boolean(task?.notes?.trim());
 
   return (
     <>
@@ -62,6 +72,15 @@ export default function TaskFormFields({
         <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Task name</label>
         <input name="name" required defaultValue={task?.name} className="w-full" placeholder="e.g. Wipe counters" />
       </div>
+      <label className="flex items-start gap-2.5 text-sm cursor-pointer">
+        <input type="checkbox" name="important" defaultChecked={task?.important ?? false} className="mt-0.5" />
+        <span>
+          Important
+          <span className="block text-xs font-normal mt-0.5" style={{ color: "var(--text3)" }}>
+            Once due, stays at the top of the list until it’s done
+          </span>
+        </span>
+      </label>
       <div className="flex gap-3">
         <div className="flex-1">
           <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Difficulty</label>
@@ -138,6 +157,27 @@ export default function TaskFormFields({
           </div>
         </div>
       )}
+      <div>
+        <button
+          type="button"
+          onClick={() => setNotesOpen((v) => !v)}
+          className="flex items-center gap-1 text-xs"
+          style={{ color: "var(--text3)" }}
+          aria-expanded={notesOpen}
+        >
+          {notesOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          Notes
+          {hasNotes && !notesOpen && <span style={{ color: "var(--text2)" }}>· added</span>}
+        </button>
+        <textarea
+          name="notes"
+          defaultValue={task?.notes ?? ""}
+          rows={3}
+          maxLength={2000}
+          placeholder="Context that stays after this is checked off"
+          className={`w-full mt-2 ${notesOpen ? "" : "hidden"}`}
+        />
+      </div>
     </>
   );
 }

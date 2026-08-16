@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { runDailyAssignment, sendDueReminders, sendNotificationsForTime } from "./scheduler";
+import { reshuffleFrom, sendDueReminders, sendNotificationsForTime } from "./scheduler";
 import { format } from "date-fns";
 
 let started = false;
@@ -8,10 +8,11 @@ export function startCron() {
   if (started) return;
   started = true;
 
-  // Midnight: run daily assignment
+  // Midnight: re-pick auto chores for the next few weeks so dirtier / important
+  // work floats up. Pins, manual moves, and one-offs stay put.
   cron.schedule("0 0 * * *", async () => {
-    console.log("[cron] Running daily assignment...");
-    const result = await runDailyAssignment();
+    console.log("[cron] Refreshing auto assignments...");
+    const result = await reshuffleFrom(undefined, 21, { keepHeld: true });
     console.log(`[cron] Assigned ${result.assigned} tasks`);
   });
 

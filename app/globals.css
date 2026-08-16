@@ -75,7 +75,9 @@ body {
   ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
 }
 
-input, select, textarea {
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
   background: var(--surface2);
   color: var(--text);
   border: 1px solid var(--border);
@@ -87,9 +89,13 @@ input, select, textarea {
   width: 100%;
 }
 @media (min-width: 768px) {
-  input, select, textarea { font-size: 14px; }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea { font-size: 14px; }
 }
-input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+select:focus,
+textarea:focus { border-color: var(--accent); }
 input::placeholder { color: var(--text3); }
 
 button { cursor: pointer; }
