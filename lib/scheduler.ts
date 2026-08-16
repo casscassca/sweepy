@@ -489,7 +489,7 @@ export async function sendNotificationsForUser(
       message: `${difficulty} · tap an action below`,
     };
     // Short action ids — iOS / companion historically cap identifiers around 32 chars.
-    // cuid() is 25; DONE_ + id = 30, DEFER_ + id = 31.
+    // cuid() is 25; DONE_ + id = 30, DEFER_ + id = 31, YDAY_ + id = 30.
     const withActions = {
       ...base,
       data: {
@@ -500,7 +500,7 @@ export async function sendNotificationsForUser(
         actions: [
           { action: `DONE_${assignment.id}`, title: "Done" },
           { action: `DEFER_${assignment.id}`, title: "Tomorrow" },
-          { action: `WAIT_${assignment.id}`, title: "Later" },
+          { action: `YDAY_${assignment.id}`, title: "Yesterday" },
         ],
       },
     };
@@ -548,6 +548,28 @@ export async function sendNotificationsForUser(
   await prisma.user.update({ where: { id: user.id }, data: { notifyTags: nextTags.join(",") } });
 
   return { ok: errors.length === 0, sent, cleared, reason: errors[0] ?? resolved.hint, errors, attempts };
+}
+
+/** After a slot frees up, top up today and ping any newly assigned chores. */
+export async function fillUserTodayAndNotify(userId: string) {
+  const date = todayStr();
+  const before = new Set(
+    (await prisma.dailyAssignment.findMany({
+      where: { userId, date, completedAt: null },
+      select: { id: true },
+    })).map((a) => a.id),
+  );
+  await runDailyAssignment(date);
+  const added = (
+    await prisma.dailyAssignment.findMany({
+      where: { userId, date, completedAt: null },
+      select: { id: true },
+    })
+  ).map((a) => a.id).filter((id) => !before.has(id));
+  if (added.length > 0) {
+    await sendNotificationsForUser(userId, date, added);
+  }
+  return added.length;
 }
 
 export async function sendDueReminders() {

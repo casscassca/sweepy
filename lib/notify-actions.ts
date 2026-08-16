@@ -1,15 +1,17 @@
 import { addDays, addHours, format } from "date-fns";
 import { prisma } from "./prisma";
 import { appendIntegrationLog } from "./integration-log";
-import { holdAssignmentOnDate } from "./scheduler";
+import { fillUserTodayAndNotify, holdAssignmentOnDate } from "./scheduler";
 
-export type NotifyActionKind = "done" | "tomorrow" | "later";
+export type NotifyActionKind = "done" | "tomorrow" | "yesterday" | "later";
 
 export function parseNotifyAction(action: string): { kind: NotifyActionKind; assignmentId: string } | null {
   const rules: Array<{ prefix: string; kind: NotifyActionKind }> = [
     { prefix: "MARK_DONE_", kind: "done" },
     { prefix: "DONE_", kind: "done" },
     { prefix: "DEFER_", kind: "tomorrow" },
+    { prefix: "YDAY_", kind: "yesterday" },
+    { prefix: "YEST_", kind: "yesterday" },
     { prefix: "WAIT_", kind: "later" },
     { prefix: "LATER_", kind: "later" },
   ];
@@ -87,6 +89,32 @@ export async function applyNotifyAction(opts: {
       detail: opts.source,
     });
     return { ok: true as const, deferred: true };
+  }
+
+  if (parsed.kind === "yesterday") {
+    const completedAt = new Date(`${format(addDays(new Date(), -1), "yyyy-MM-dd")}T12:00:00`);
+    await prisma.dailyAssignment.update({
+      where: { id: assignment.id },
+      data: { completedAt, completedById: actorId, remindAt: null },
+    });
+    await prisma.task.update({ where: { id: assignment.taskId }, data: { lastDoneAt: completedAt } });
+    await prisma.completionLog.create({
+      data: {
+        taskId: assignment.taskId,
+        userId: assignment.userId,
+        completedById: actorId,
+        completedAt,
+      },
+    });
+    const pulled = await fillUserTodayAndNotify(assignment.userId);
+    await appendIntegrationLog({
+      kind: "webhook",
+      ok: true,
+      userName: actorName,
+      summary: `${actorName} marked ${assignment.task.name} done yesterday${pulled > 0 ? ` · pulled ${pulled} more` : ""}`,
+      detail: opts.source,
+    });
+    return { ok: true as const, yesterday: true, pulled };
   }
 
   const remindAt = addHours(new Date(), 1);

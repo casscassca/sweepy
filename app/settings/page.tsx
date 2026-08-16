@@ -88,7 +88,7 @@ export default function SettingsPage() {
             </p>
             <p className="text-sm" style={{ color: ha.listening ? "var(--green)" : "var(--text3)" }}>
               {ha.listening
-                ? "Listening for Done / Tomorrow / Later taps"
+                ? "Listening for Done / Tomorrow / Yesterday taps"
                 : ha.listenError ?? "Not listening for button taps yet"}
             </p>
           </div>
@@ -124,7 +124,7 @@ export default function SettingsPage() {
         </button>
         {showLog && (
           !ha || ha.log.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--text3)" }}>Nothing yet. Bell on People and Done / Tomorrow taps show up here.</p>
+            <p className="text-sm" style={{ color: "var(--text3)" }}>Nothing yet. Bell on People and Done / Tomorrow / Yesterday taps show up here.</p>
           ) : (
             <ul className="space-y-2">
               {ha.log.map((row) => (
@@ -167,7 +167,7 @@ export default function SettingsPage() {
           <div className="space-y-3">
             <p className="text-sm" style={{ color: "var(--text2)" }}>
               The house connection is <code className="text-xs">HA_URL</code> and <code className="text-xs">HA_TOKEN</code> in the Pi <code className="text-xs">.env</code> — one token for everyone.
-              Sweepy listens for the notification buttons on that connection, so you do not need a Home Assistant automation for Done / Tomorrow / Later.
+              Sweepy listens for the notification buttons on that connection, so you do not need a Home Assistant automation for Done / Tomorrow / Yesterday.
             </p>
             {ha && ha.services.length > 0 && (
               <div>
@@ -216,8 +216,8 @@ export default function SettingsPage() {
           <ul className="space-y-2 mt-3">
             {[
               "At midnight, auto-picks are refreshed for the next few weeks so dirtier and important chores float up. Pins, things you moved by hand, and one-offs stay put",
-              "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Later. The bell on People clears their phone first, then resends from today's list",
-              "Done checks it off. Tomorrow moves it to the next day. Later closes it and pings again in an hour",
+              "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Yesterday. The bell on People clears their phone first, then resends from today's list",
+              "Done checks it off today. Tomorrow moves it to the next day. Yesterday checks it off as yesterday and pulls in the next due chore",
               "Tasks can be checked off or deferred in the Today and Upcoming views too",
               "A day you pick for a chore stays put. If that day goes over someone's task or points cap, extras slide to the next day — auto-picks first",
             ].map((line) => (
