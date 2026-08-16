@@ -6,7 +6,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, Circle, Plus, RefreshCw, X } from "lucide-react";
+import { GripVertical, CheckCircle2, Circle, Plus, RefreshCw, UserCheck, X } from "lucide-react";
 import AddToDaySheet from "@/components/AddToDaySheet";
 
 type User = { id: string; name: string; color: string; dailyCapacity: number };
@@ -16,8 +16,8 @@ type Assignment = { id: string; userId: string; order: number; completedAt: stri
 const DIFF_COLOR = ["", "#a78bfa", "#fb923c", "#f87171"];
 const DIFF_LABEL = ["", "quick", "medium", "big job"];
 
-function SortableItem({ assignment, users, onComplete, onUncomplete, onRemove }: {
-  assignment: Assignment; users: User[];
+function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRemove }: {
+  assignment: Assignment; users: User[]; meId?: string;
   onComplete: (id: string, by: string) => void;
   onUncomplete: (id: string) => void;
   onRemove: (id: string) => void;
@@ -25,6 +25,11 @@ function SortableItem({ assignment, users, onComplete, onUncomplete, onRemove }:
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: assignment.id });
   const [showWho, setShowWho] = useState(false);
   const done = !!assignment.completedAt;
+
+  function markMine() {
+    if (meId) onComplete(assignment.id, meId);
+    else setShowWho(true);
+  }
 
   return (
     <div
@@ -35,7 +40,7 @@ function SortableItem({ assignment, users, onComplete, onUncomplete, onRemove }:
       <button {...attributes} {...listeners} aria-label="Reorder task" className="cursor-grab touch-none p-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }}>
         <GripVertical size={14} />
       </button>
-      <button onClick={() => done ? onUncomplete(assignment.id) : setShowWho(true)} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 transition-colors min-h-11 w-9 flex items-center justify-center -ml-1" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
+      <button onClick={() => done ? onUncomplete(assignment.id) : markMine()} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 transition-colors min-h-11 w-9 flex items-center justify-center -ml-1" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
         {done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
       </button>
       <div className="flex-1 min-w-0">
@@ -51,13 +56,27 @@ function SortableItem({ assignment, users, onComplete, onUncomplete, onRemove }:
           </span>
         </div>
       </div>
-      <button onClick={() => onRemove(assignment.id)} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }} title="Remove from today" aria-label="Remove from today">
-        <X size={16} />
-      </button>
+      <div className="flex items-center shrink-0">
+        {!done && (
+          <button
+            type="button"
+            onClick={() => setShowWho(true)}
+            className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+            style={{ color: "var(--text3)" }}
+            title="Done as someone else"
+            aria-label="Mark done as someone else"
+          >
+            <UserCheck size={16} />
+          </button>
+        )}
+        <button onClick={() => onRemove(assignment.id)} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }} title="Remove from today" aria-label="Remove from today">
+          <X size={16} />
+        </button>
+      </div>
 
       {showWho && (
         <div className="absolute right-2 top-full mt-1 z-20 rounded-xl shadow-xl p-1.5 min-w-40" style={{ background: "var(--surface)", border: "1px solid var(--border-hover)" }}>
-          <p className="text-xs px-2 py-1 mb-0.5" style={{ color: "var(--text3)" }}>Who did this?</p>
+          <p className="text-xs px-2 py-1 mb-0.5" style={{ color: "var(--text3)" }}>Done as</p>
           {users.map((u) => (
             <button key={u.id} onClick={() => { onComplete(assignment.id, u.id); setShowWho(false); }} className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-black/5">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: u.color }} />
@@ -198,7 +217,7 @@ export default function TodayPage() {
                 </div>
                 <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                   {items.map((a) => (
-                    <SortableItem key={a.id} assignment={a} users={users} onComplete={complete} onUncomplete={uncomplete} onRemove={remove} />
+                    <SortableItem key={a.id} assignment={a} users={users} meId={meId} onComplete={complete} onUncomplete={uncomplete} onRemove={remove} />
                   ))}
                 </SortableContext>
                 {items.length === 0 && (

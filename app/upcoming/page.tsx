@@ -7,7 +7,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, Circle, Pencil, Plus, X, RefreshCw } from "lucide-react";
+import { GripVertical, CheckCircle2, Circle, Pencil, Plus, UserCheck, X, RefreshCw } from "lucide-react";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 import DirtGauge from "@/components/DirtGauge";
 import TaskEditModal from "@/components/TaskEditModal";
@@ -53,8 +53,8 @@ function PersonMenu({
   );
 }
 
-function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdit, onReassign, dragHandleProps, isDragOverlay }: {
-  assignment: Assignment; users: User[];
+function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove, onEdit, onReassign, dragHandleProps, isDragOverlay }: {
+  assignment: Assignment; users: User[]; meId?: string;
   onComplete?: (id: string, by: string) => void;
   onUncomplete?: (id: string) => void;
   onRemove?: (id: string) => void;
@@ -66,6 +66,11 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdi
   const [showWho, setShowWho] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
   const done = !!assignment.completedAt;
+
+  function markMine() {
+    if (meId) onComplete?.(assignment.id, meId);
+    else { setShowAssign(false); setShowWho(true); }
+  }
 
   return (
     <div
@@ -83,7 +88,7 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdi
         <GripVertical size={14} />
       </div>
       {onComplete && (
-        <button onClick={() => { if (done) { onUncomplete?.(assignment.id); } else { setShowAssign(false); setShowWho(true); } }} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 min-h-11 w-9 flex items-center justify-center -ml-1" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
+        <button onClick={() => { if (done) { onUncomplete?.(assignment.id); } else { markMine(); } }} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 min-h-11 w-9 flex items-center justify-center -ml-1" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
           {done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
         </button>
       )}
@@ -125,6 +130,18 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdi
         </div>
       </div>
       <div className="flex items-center shrink-0">
+        {onComplete && !done && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setShowAssign(false); setShowWho(true); }}
+            className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+            style={{ color: "var(--text3)" }}
+            title="Done as someone else"
+            aria-label="Mark done as someone else"
+          >
+            <UserCheck size={16} />
+          </button>
+        )}
         {onEdit && (
           <button
             type="button"
@@ -144,7 +161,7 @@ function TaskCard({ assignment, users, onComplete, onUncomplete, onRemove, onEdi
       </div>
       {showWho && (
         <PersonMenu
-          title="Who did this?"
+          title="Done as"
           users={users}
           onPick={(id) => onComplete?.(assignment.id, id)}
           onClose={() => setShowWho(false)}
@@ -383,6 +400,7 @@ export default function UpcomingPage() {
                           key={a.id}
                           assignment={a}
                           users={users}
+                          meId={me?.id}
                           onComplete={isCurrentDay ? complete : undefined}
                           onUncomplete={isCurrentDay ? uncomplete : undefined}
                           onRemove={remove}
