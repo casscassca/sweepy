@@ -19,7 +19,14 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { date, userId, order } = await req.json();
+  const { date, userId, order, pinned } = await req.json();
+
+  if (typeof pinned === "boolean") {
+    return NextResponse.json(await prisma.dailyAssignment.update({
+      where: { id },
+      data: { pinned, ...(pinned ? { held: true } : {}) },
+    }));
+  }
 
   if (typeof date === "string") {
     const assignment = await holdAssignmentOnDate(id, date);

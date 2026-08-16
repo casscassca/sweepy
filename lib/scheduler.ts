@@ -64,9 +64,17 @@ export async function rollForwardPastAssignments(today = todayStr()) {
   return past.length;
 }
 
+function stayRank(a: { pinned: boolean; held: boolean; task: { oneOff: boolean } }) {
+  if (a.pinned) return 3;
+  if (a.held && !a.task.oneOff) return 2;
+  if (a.task.oneOff) return 1;
+  return 0;
+}
+
 /**
  * If someone is over their daily points, extras slide to the next day.
- * Auto-scheduled rows move first; held rows only move if the day is still stuffed.
+ * Auto-picks leave first, then unpinned one-offs. Pins and manually moved
+ * catalog chores stay, so a day can go over capacity on purpose.
  */
 export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
   const users = await prisma.user.findMany({ select: { id: true, dailyCapacity: true } });
@@ -78,7 +86,7 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
     const next = format(addDays(start, i + 1), "yyyy-MM-dd");
     const open = await prisma.dailyAssignment.findMany({
       where: { date, completedAt: null },
-      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true } } },
+      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, oneOff: true } } },
     });
 
     const byUser = new Map<string, typeof open>();
@@ -91,7 +99,8 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
     for (const [userId, items] of byUser) {
       const limit = cap.get(userId) ?? 6;
       const ranked = [...items].sort((a, b) => {
-        if (a.held !== b.held) return a.held ? 1 : -1;
+        const stay = stayRank(a) - stayRank(b);
+        if (stay !== 0) return stay;
         return (
           dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays) -
           dirtinessRatio(b.task.lastDoneAt, b.task.frequencyDays)
@@ -99,8 +108,9 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
       });
       let points = items.reduce((s, a) => s + a.task.difficulty, 0);
       let idx = 0;
-      while (points > limit && ranked.length - idx > 1 && idx < ranked.length) {
+      while (points > limit && idx < ranked.length) {
         const spill = ranked[idx++];
+        if (stayRank(spill) >= 2) break;
         const clash = await prisma.dailyAssignment.findUnique({
           where: { date_taskId: { date: next, taskId: spill.taskId } },
         });
@@ -110,6 +120,26 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
       }
     }
   }
+}
+
+/** Wipe unpinned catalog rows from today forward, then refill around pins and one-offs. */
+export async function reshuffleFrom(fromDate = todayStr(), horizon = 21) {
+  await prepareAssignments(fromDate);
+  const start = parseISO(`${fromDate}T12:00:00`);
+  const days = Array.from({ length: horizon }, (_, i) => format(addDays(start, i), "yyyy-MM-dd"));
+  await prisma.dailyAssignment.deleteMany({
+    where: {
+      date: { in: days },
+      completedAt: null,
+      pinned: false,
+      task: { oneOff: false },
+    },
+  });
+  let assigned = 0;
+  for (const date of days) {
+    assigned += (await runDailyAssignment(date, fromDate)).assigned;
+  }
+  return { assigned };
 }
 
 export async function prepareAssignments(notBefore = todayStr()) {
@@ -129,7 +159,10 @@ export async function holdAssignmentOnDate(id: string, date: string) {
     });
     if (clash) {
       await prisma.dailyAssignment.delete({ where: { id } });
-      await prisma.dailyAssignment.update({ where: { id: clash.id }, data: { held: true, remindAt: null } });
+      await prisma.dailyAssignment.update({
+        where: { id: clash.id },
+        data: { held: true, remindAt: null, pinned: current.pinned || clash.pinned },
+      });
       await enforceCapacity(date < todayStr() ? todayStr() : date);
       return clash;
     }

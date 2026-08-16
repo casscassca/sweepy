@@ -6,21 +6,23 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, Circle, Plus, RefreshCw, UserCheck, X } from "lucide-react";
+import { GripVertical, CheckCircle2, Circle, Pin, Plus, RefreshCw, UserCheck, X } from "lucide-react";
 import AddToDaySheet from "@/components/AddToDaySheet";
+import CompleteAsMenu from "@/components/CompleteAsMenu";
 
 type User = { id: string; name: string; color: string; dailyCapacity: number };
 type Task = { id: string; name: string; difficulty: number; oneOff?: boolean; room: { name: string } | null };
-type Assignment = { id: string; userId: string; order: number; completedAt: string | null; task: Task; user: User };
+type Assignment = { id: string; userId: string; order: number; completedAt: string | null; pinned?: boolean; task: Task; user: User };
 
 const DIFF_COLOR = ["", "#a78bfa", "#fb923c", "#f87171"];
 const DIFF_LABEL = ["", "quick", "medium", "big job"];
 
-function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRemove }: {
+function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRemove, onPin }: {
   assignment: Assignment; users: User[]; meId?: string;
-  onComplete: (id: string, by: string) => void;
+  onComplete: (id: string, by: string, date?: string) => void;
   onUncomplete: (id: string) => void;
   onRemove: (id: string) => void;
+  onPin: (id: string, pinned: boolean) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: assignment.id });
   const [showWho, setShowWho] = useState(false);
@@ -72,19 +74,24 @@ function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRem
         <button onClick={() => onRemove(assignment.id)} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }} title="Remove from today" aria-label="Remove from today">
           <X size={16} />
         </button>
+        <button
+          type="button"
+          onClick={() => onPin(assignment.id, !assignment.pinned)}
+          className={`p-2 rounded-lg ${assignment.pinned ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100"} transition-opacity`}
+          style={{ color: assignment.pinned ? "var(--accent)" : "var(--text3)" }}
+          title={assignment.pinned ? "Unpin from this day" : "Pin to this day"}
+          aria-label={assignment.pinned ? "Unpin from this day" : "Pin to this day"}
+        >
+          <Pin size={16} fill={assignment.pinned ? "currentColor" : "none"} />
+        </button>
       </div>
 
       {showWho && (
-        <div className="absolute right-2 top-full mt-1 z-20 rounded-xl shadow-xl p-1.5 min-w-40" style={{ background: "var(--surface)", border: "1px solid var(--border-hover)" }}>
-          <p className="text-xs px-2 py-1 mb-0.5" style={{ color: "var(--text3)" }}>Done as</p>
-          {users.map((u) => (
-            <button key={u.id} onClick={() => { onComplete(assignment.id, u.id); setShowWho(false); }} className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-black/5">
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: u.color }} />
-              {u.name}
-            </button>
-          ))}
-          <button onClick={() => setShowWho(false)} className="w-full text-xs px-2 py-1 mt-0.5 rounded-lg" style={{ color: "var(--text3)" }}>Cancel</button>
-        </div>
+        <CompleteAsMenu
+          users={users}
+          onPick={(userId, date) => { onComplete(assignment.id, userId, date); setShowWho(false); }}
+          onClose={() => setShowWho(false)}
+        />
       )}
     </div>
   );
@@ -126,8 +133,8 @@ export default function TodayPage() {
     await load(); setRunning(false);
   }
 
-  async function complete(assignmentId: string, completedById: string) {
-    await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById }) });
+  async function complete(assignmentId: string, completedById: string, completedAt?: string) {
+    await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt }) });
     load();
   }
 
@@ -139,6 +146,15 @@ export default function TodayPage() {
   async function remove(assignmentId: string) {
     await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
     load();
+  }
+
+  async function pin(assignmentId: string, pinned: boolean) {
+    setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, pinned } : a)));
+    await fetch(`/api/assignments/${assignmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pinned }),
+    });
   }
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -217,7 +233,7 @@ export default function TodayPage() {
                 </div>
                 <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                   {items.map((a) => (
-                    <SortableItem key={a.id} assignment={a} users={users} meId={meId} onComplete={complete} onUncomplete={uncomplete} onRemove={remove} />
+                    <SortableItem key={a.id} assignment={a} users={users} meId={meId} onComplete={complete} onUncomplete={uncomplete} onRemove={remove} onPin={pin} />
                   ))}
                 </SortableContext>
                 {items.length === 0 && (

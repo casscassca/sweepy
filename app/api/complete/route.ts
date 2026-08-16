@@ -1,28 +1,37 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+function completedAtFrom(raw: unknown) {
+  if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const noon = new Date(`${raw}T12:00:00`);
+    const todayNoon = new Date();
+    todayNoon.setHours(12, 0, 0, 0);
+    if (!Number.isNaN(noon.getTime()) && noon <= todayNoon) return noon;
+  }
+  return new Date();
+}
+
 export async function POST(req: Request) {
-  const { assignmentId, completedById } = await req.json();
+  const { assignmentId, completedById, completedAt: rawDate } = await req.json();
+  const completedAt = completedAtFrom(rawDate);
 
   const assignment = await prisma.dailyAssignment.update({
     where: { id: assignmentId },
-    data: { completedAt: new Date(), completedById },
+    data: { completedAt, completedById },
     include: { task: true },
   });
 
-  // Update task's lastDoneAt
   await prisma.task.update({
     where: { id: assignment.taskId },
-    data: { lastDoneAt: new Date() },
+    data: { lastDoneAt: completedAt },
   });
 
-  // Log it
   await prisma.completionLog.create({
     data: {
       taskId: assignment.taskId,
       userId: assignment.userId,
       completedById,
-      completedAt: new Date(),
+      completedAt,
     },
   });
 

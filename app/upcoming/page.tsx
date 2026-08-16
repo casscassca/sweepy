@@ -7,16 +7,17 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, Circle, Pencil, Plus, UserCheck, X, RefreshCw } from "lucide-react";
+import { GripVertical, CheckCircle2, Circle, Pencil, Pin, Plus, UserCheck, X, RefreshCw } from "lucide-react";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 import DirtGauge from "@/components/DirtGauge";
 import TaskEditModal from "@/components/TaskEditModal";
 import AddToDaySheet from "@/components/AddToDaySheet";
+import CompleteAsMenu from "@/components/CompleteAsMenu";
 import type { TaskFormTask } from "@/components/TaskFormFields";
 
 type User = { id: string; name: string; color: string };
 type Task = TaskFormTask & { room: { name: string } | null; oneOff?: boolean };
-type Assignment = { id: string; userId: string; date: string; order: number; completedAt: string | null; task: Task; user: User };
+type Assignment = { id: string; userId: string; date: string; order: number; completedAt: string | null; pinned?: boolean; task: Task; user: User };
 
 const DIFF_COLOR = ["", "#a78bfa", "#fb923c", "#f87171"];
 const DIFF_LABEL = ["", "quick", "medium", "big job"];
@@ -53,13 +54,14 @@ function PersonMenu({
   );
 }
 
-function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove, onEdit, onReassign, dragHandleProps, isDragOverlay }: {
+function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove, onEdit, onReassign, onPin, dragHandleProps, isDragOverlay }: {
   assignment: Assignment; users: User[]; meId?: string;
-  onComplete?: (id: string, by: string) => void;
+  onComplete?: (id: string, by: string, date?: string) => void;
   onUncomplete?: (id: string) => void;
   onRemove?: (id: string) => void;
   onEdit?: (task: Task) => void;
   onReassign?: (id: string, userId: string) => void;
+  onPin?: (id: string, pinned: boolean) => void;
   dragHandleProps?: HTMLAttributes<HTMLElement>;
   isDragOverlay?: boolean;
 }) {
@@ -158,12 +160,24 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
             <X size={16} />
           </button>
         )}
+        {onPin && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onPin(assignment.id, !assignment.pinned); }}
+            className={`p-2 rounded-lg ${assignment.pinned ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100"} transition-opacity`}
+            style={{ color: assignment.pinned ? "var(--accent)" : "var(--text3)" }}
+            title={assignment.pinned ? "Unpin from this day" : "Pin to this day"}
+            aria-label={assignment.pinned ? "Unpin from this day" : "Pin to this day"}
+          >
+            <Pin size={16} fill={assignment.pinned ? "currentColor" : "none"} />
+          </button>
+        )}
       </div>
       {showWho && (
-        <PersonMenu
-          title="Done as"
+        <CompleteAsMenu
           users={users}
-          onPick={(id) => onComplete?.(assignment.id, id)}
+          defaultDate={assignment.date}
+          onPick={(userId, date) => { onComplete?.(assignment.id, userId, date); setShowWho(false); }}
           onClose={() => setShowWho(false)}
         />
       )}
@@ -256,8 +270,8 @@ export default function UpcomingPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function complete(assignmentId: string, completedById: string) {
-    await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById }) });
+  async function complete(assignmentId: string, completedById: string, completedAt?: string) {
+    await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt }) });
     load();
   }
 
@@ -269,6 +283,15 @@ export default function UpcomingPage() {
   async function remove(assignmentId: string) {
     await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
     setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
+  }
+
+  async function pin(assignmentId: string, pinned: boolean) {
+    setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, pinned } : a)));
+    await fetch(`/api/assignments/${assignmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pinned }),
+    });
   }
 
   async function reassign(assignmentId: string, userId: string) {
@@ -406,6 +429,7 @@ export default function UpcomingPage() {
                           onRemove={remove}
                           onEdit={a.task.oneOff ? undefined : setEditingTask}
                           onReassign={reassign}
+                          onPin={pin}
                         />
                       ))}
                       {dayAssignments.length === 0 && (
