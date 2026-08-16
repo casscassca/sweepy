@@ -368,22 +368,62 @@ async function logNotify(entry: {
   await appendIntegrationLog({ kind: "notify", ...entry });
 }
 
+function parseNotifyTags(raw: string | null | undefined) {
+  return (raw ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+}
+
+async function clearPhoneNotifications(
+  ha: NonNullable<ReturnType<typeof haConfig>>,
+  service: string,
+  tags: string[],
+) {
+  const unique = [...new Set(tags)];
+  for (const tag of unique) {
+    await postNotify(ha, service, {
+      message: "clear_notification",
+      data: { tag },
+    });
+  }
+  return unique.length;
+}
+
 export async function sendNotificationsForUser(
   userId: string,
   date = todayStr(),
   onlyIds?: string[],
+  opts?: { replace?: boolean },
 ) {
+  const replace = opts?.replace === true;
   const ha = haConfig();
   if (!ha) {
     await logNotify({ ok: false, userName: "", summary: "HA_URL or HA_TOKEN is not set" });
-    return { ok: false as const, reason: "HA_URL or HA_TOKEN is not set", sent: 0, attempts: [] as NotifyAttempt[] };
+    return { ok: false as const, reason: "HA_URL or HA_TOKEN is not set", sent: 0, cleared: 0, attempts: [] as NotifyAttempt[] };
   }
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return { ok: false as const, reason: "person not found", sent: 0, attempts: [] as NotifyAttempt[] };
+  if (!user) return { ok: false as const, reason: "person not found", sent: 0, cleared: 0, attempts: [] as NotifyAttempt[] };
   if (!user.haNotifyTarget) {
     await logNotify({ ok: false, userName: user.name, summary: `${user.name} has no HA notify target` });
-    return { ok: false as const, reason: `${user.name} has no HA notify target`, sent: 0, attempts: [] as NotifyAttempt[] };
+    return { ok: false as const, reason: `${user.name} has no HA notify target`, sent: 0, cleared: 0, attempts: [] as NotifyAttempt[] };
+  }
+
+  const catalog = await listHaNotifyCatalog(ha);
+  if (!catalog.reachable) {
+    const reason = catalog.error ?? "Home Assistant is unreachable";
+    await logNotify({ ok: false, userName: user.name, summary: reason, detail: ha.url });
+    return { ok: false as const, reason, sent: 0, cleared: 0, attempts: [] as NotifyAttempt[] };
+  }
+
+  const resolved = resolveNotifyTarget(user.haNotifyTarget, catalog);
+  if (!resolved.ok) {
+    const reason = resolved.hint ?? `unknown notify target ${user.haNotifyTarget}`;
+    await logNotify({
+      ok: false,
+      userName: user.name,
+      summary: reason,
+      detail: `stored ${user.haNotifyTarget}\nservices ${catalog.services.map((s) => `notify.${s}`).join(", ")}\nentities ${catalog.entities.join(", ")}`,
+    });
+    return { ok: false as const, reason, sent: 0, cleared: 0, attempts: [] as NotifyAttempt[] };
   }
 
   const assignments = await prisma.dailyAssignment.findMany({
@@ -398,37 +438,52 @@ export async function sendNotificationsForUser(
     include: { task: { include: { room: true } } },
     orderBy: { order: "asc" },
   });
+  assignments.sort((a, b) => {
+    const aImp = a.task.important ? 1 : 0;
+    const bImp = b.task.important ? 1 : 0;
+    if (aImp !== bImp) return bImp - aImp;
+    return a.order - b.order;
+  });
+
+  // iOS rarely honors clear_notification (the app has to wake). Same-tag
+  // replace is what actually updates a banner. Keep assignment.id as the tag
+  // so a resend overwrites this morning's notifies instead of stacking.
+  let cleared = 0;
+  if (replace) {
+    const keep = new Set(assignments.map((a) => a.id));
+    const leftovers = [
+      ...parseNotifyTags(user.notifyTags),
+      ...assignments.map((a) => a.taskId),
+    ].filter((tag) => !keep.has(tag));
+    cleared = await clearPhoneNotifications(ha, resolved.service, leftovers);
+    if (cleared > 0) {
+      await logNotify({
+        ok: true,
+        userName: user.name,
+        summary: `asked HA to dismiss ${cleared} leftover notify tag${cleared === 1 ? "" : "s"} for ${user.name}`,
+      });
+    }
+  }
+
   if (assignments.length === 0) {
+    if (replace) {
+      await prisma.user.update({ where: { id: user.id }, data: { notifyTags: "" } });
+      await logNotify({ ok: true, userName: user.name, summary: `cleared ${user.name}'s notifies — nothing on ${date}` });
+      return { ok: true as const, sent: 0, cleared, reason: `cleared ${user.name}'s notifies — nothing on today's list`, attempts: [] as NotifyAttempt[] };
+    }
     await logNotify({ ok: false, userName: user.name, summary: `${user.name} has no open tasks on ${date}` });
-    return { ok: false as const, reason: `${user.name} has no open tasks on ${date}`, sent: 0, attempts: [] as NotifyAttempt[] };
-  }
-
-  const catalog = await listHaNotifyCatalog(ha);
-  if (!catalog.reachable) {
-    const reason = catalog.error ?? "Home Assistant is unreachable";
-    await logNotify({ ok: false, userName: user.name, summary: reason, detail: ha.url });
-    return { ok: false as const, reason, sent: 0, attempts: [] as NotifyAttempt[] };
-  }
-
-  const resolved = resolveNotifyTarget(user.haNotifyTarget, catalog);
-  if (!resolved.ok) {
-    const reason = resolved.hint ?? `unknown notify target ${user.haNotifyTarget}`;
-    await logNotify({
-      ok: false,
-      userName: user.name,
-      summary: reason,
-      detail: `stored ${user.haNotifyTarget}\nservices ${catalog.services.map((s) => `notify.${s}`).join(", ")}\nentities ${catalog.entities.join(", ")}`,
-    });
-    return { ok: false as const, reason, sent: 0, attempts: [] as NotifyAttempt[] };
+    return { ok: false as const, reason: `${user.name} has no open tasks on ${date}`, sent: 0, cleared, attempts: [] as NotifyAttempt[] };
   }
 
   const errors: string[] = [];
   const attempts: NotifyAttempt[] = [];
   let sent = 0;
+  const sentIds: string[] = [];
 
   for (const assignment of assignments) {
     const difficulty = ["", "quick", "medium", "big job"][assignment.task.difficulty];
     const taskName = assignment.task.name;
+    const tag = assignment.id;
     const base = {
       title: assignment.task.room ? `${assignment.task.room.name}: ${taskName}` : taskName,
       message: `${difficulty} · tap an action below`,
@@ -438,7 +493,8 @@ export async function sendNotificationsForUser(
     const withActions = {
       ...base,
       data: {
-        tag: assignment.id,
+        tag,
+        apns_headers: { "apns-collapse-id": tag },
         sweepyUserId: user.id,
         action_data: { sweepyUserId: user.id },
         actions: [
@@ -476,6 +532,7 @@ export async function sendNotificationsForUser(
         continue;
       }
       sent++;
+      sentIds.push(assignment.id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       attempts.push({ taskName, service: `notify.${resolved.service}`, url: "", ok: false, status: 0, detail: msg });
@@ -484,7 +541,13 @@ export async function sendNotificationsForUser(
     }
   }
 
-  return { ok: errors.length === 0, sent, reason: errors[0] ?? resolved.hint, errors, attempts };
+  const previous = parseNotifyTags(user.notifyTags);
+  const nextTags = onlyIds && !replace
+    ? [...new Set([...previous, ...sentIds])]
+    : sentIds;
+  await prisma.user.update({ where: { id: user.id }, data: { notifyTags: nextTags.join(",") } });
+
+  return { ok: errors.length === 0, sent, cleared, reason: errors[0] ?? resolved.hint, errors, attempts };
 }
 
 export async function sendDueReminders() {

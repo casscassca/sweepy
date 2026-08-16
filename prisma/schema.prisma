@@ -57,6 +57,8 @@ model User {
   // Per-user secret for the Home Assistant webhook — both authorizes the call
   // and identifies who acted (so completions credit the right person).
   webhookSecret  String   @default("")
+  // Assignment ids last pushed to this person's phone, so we can dismiss them.
+  notifyTags     String   @default("")
   assignableTasks TaskAssignableUser[]
   assignments     DailyAssignment[]
   completions     CompletionLog[]

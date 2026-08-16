@@ -216,7 +216,7 @@ export default function SettingsPage() {
           <ul className="space-y-2 mt-3">
             {[
               "At midnight, auto-picks are refreshed for the next few weeks so dirtier and important chores float up. Pins, things you moved by hand, and one-offs stay put",
-              "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Later",
+              "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Later. The bell on People clears their phone first, then resends from today's list",
               "Done checks it off. Tomorrow moves it to the next day. Later closes it and pings again in an hour",
               "Tasks can be checked off or deferred in the Today and Upcoming views too",
               "A day you pick for a chore stays put. If that day goes over someone's task or points cap, extras slide to the next day — auto-picks first",

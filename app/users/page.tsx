@@ -66,10 +66,11 @@ export default function UsersPage() {
     const res = await fetch("/api/notify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: user.id }),
+      body: JSON.stringify({ userId: user.id, replace: true }),
     });
     const data = await res.json().catch(() => ({}));
-    if (data.ok) setNotifyMsg(`Sent ${data.sent} notify${data.sent === 1 ? "" : "s"} to ${user.name}`);
+    if (data.ok && data.sent === 0) setNotifyMsg(data.reason ?? `Cleared ${user.name}'s notifies`);
+    else if (data.ok) setNotifyMsg(`Resent ${data.sent} to ${user.name}`);
     else setNotifyMsg(data.reason ?? "Notify failed");
     const attempts = Array.isArray(data.attempts)
       ? data.attempts.map((a: { taskName: string; service: string; status: number; ok: boolean; url: string }) =>
@@ -196,7 +197,7 @@ export default function UsersPage() {
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => notifyNow(user)} title="Send today's notifies now" aria-label="Send notify now" className="p-2 rounded-xl" style={{ color: "var(--text3)" }}><Bell size={14} /></button>
+                  <button onClick={() => notifyNow(user)} title="Clear this person's phone notifies and resend today's list" aria-label="Resend notifies" className="p-2 rounded-xl" style={{ color: "var(--text3)" }}><Bell size={14} /></button>
                   <button onClick={() => setShowToken(showToken === user.id ? null : user.id)} title="Webhook token" aria-label="Webhook token" className="p-2 rounded-xl" style={{ color: showToken === user.id ? "var(--accent)" : "var(--text3)" }}><KeyRound size={14} /></button>
                   <button onClick={() => startEdit(user)} className="p-2 rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }} aria-label="Edit person"><Pencil size={14} /></button>
                   <button onClick={() => remove(user.id)} className="p-2 rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--red)" }} aria-label="Remove person"><Trash2 size={14} /></button>
