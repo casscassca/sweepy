@@ -1,5 +1,6 @@
 import { addDays, addHours, format } from "date-fns";
 import { prisma } from "./prisma";
+import { completeAssignment } from "./complete";
 import { appendIntegrationLog } from "./integration-log";
 import { fillUserTodayAndNotify, holdAssignmentOnDate } from "./scheduler";
 
@@ -60,13 +61,10 @@ export async function applyNotifyAction(opts: {
   }
 
   if (parsed.kind === "done") {
-    await prisma.dailyAssignment.update({
-      where: { id: assignment.id },
-      data: { completedAt: new Date(), completedById: actorId, remindAt: null },
-    });
-    await prisma.task.update({ where: { id: assignment.taskId }, data: { lastDoneAt: new Date() } });
-    await prisma.completionLog.create({
-      data: { taskId: assignment.taskId, userId: assignment.userId, completedById: actorId },
+    await completeAssignment({
+      assignmentId: assignment.id,
+      completedById: actorId,
+      completedAt: new Date(),
     });
     await appendIntegrationLog({
       kind: "webhook",
@@ -92,19 +90,13 @@ export async function applyNotifyAction(opts: {
   }
 
   if (parsed.kind === "yesterday") {
-    const completedAt = new Date(`${format(addDays(new Date(), -1), "yyyy-MM-dd")}T12:00:00`);
-    await prisma.dailyAssignment.update({
-      where: { id: assignment.id },
-      data: { completedAt, completedById: actorId, remindAt: null },
-    });
-    await prisma.task.update({ where: { id: assignment.taskId }, data: { lastDoneAt: completedAt } });
-    await prisma.completionLog.create({
-      data: {
-        taskId: assignment.taskId,
-        userId: assignment.userId,
-        completedById: actorId,
-        completedAt,
-      },
+    const date = format(addDays(new Date(), -1), "yyyy-MM-dd");
+    const completedAt = new Date(`${date}T12:00:00`);
+    await completeAssignment({
+      assignmentId: assignment.id,
+      completedById: actorId,
+      completedAt,
+      date,
     });
     const pulled = await fillUserTodayAndNotify(assignment.userId);
     await appendIntegrationLog({

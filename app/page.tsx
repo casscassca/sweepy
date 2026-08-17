@@ -303,7 +303,7 @@ export default function TodayPage() {
           users={users}
           defaultUserId={meId}
           onClose={() => setAdding(false)}
-          onAdded={() => { setAdding(false); load(); }}
+          onAdded={() => load()}
         />
       )}
     </div>

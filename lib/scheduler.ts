@@ -70,8 +70,10 @@ function isManualStay(a: { pinned: boolean; held: boolean; task: { oneOff: boole
 
 /**
  * Auto-picks that overflow a person's daily points or task count slide forward.
- * Pins, one-offs, and anything placed by hand stay put and do not push
- * other chores off the day — a day can go over capacity on purpose.
+ * Regular chores go first (cleanest first). Important autos only slide if
+ * nothing else can. Pins, one-offs, and anything placed by hand stay put
+ * and do not push other chores off the day — a day can go over capacity
+ * on purpose.
  */
 export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
   const users = await prisma.user.findMany({ select: { id: true, dailyCapacity: true, dailyTaskLimit: true } });
@@ -98,10 +100,11 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
       const limit = cap.get(userId) ?? 6;
       const maxTasks = taskCap.get(userId) ?? 6;
       const autos = items.filter((a) => !isManualStay(a));
-      const ranked = [...autos].sort((a, b) => (
-        dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays) -
-        dirtinessRatio(b.task.lastDoneAt, b.task.frequencyDays)
-      ));
+      const ranked = [...autos].sort((a, b) => {
+        if (a.task.important !== b.task.important) return a.task.important ? 1 : -1;
+        return dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays) -
+          dirtinessRatio(b.task.lastDoneAt, b.task.frequencyDays);
+      });
       let points = autos.reduce((s, a) => s + a.task.difficulty, 0);
       let count = autos.length;
       let idx = 0;

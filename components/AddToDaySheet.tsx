@@ -30,6 +30,8 @@ export default function AddToDaySheet({
   const [rooms, setRooms] = useState<Room[]>([]);
   const [onDay, setOnDay] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [oneOffName, setOneOffName] = useState("");
   const [oneOffUserId, setOneOffUserId] = useState(defaultUserId ?? users[0]?.id ?? "");
@@ -64,7 +66,7 @@ export default function AddToDaySheet({
   }, [rooms, query]);
 
   async function addCatalog(taskId: string) {
-    if (onDay.has(taskId) || addingId) return;
+    if (onDay.has(taskId) || adding || addingId) return;
     setAddingId(taskId);
     const res = await fetch("/api/assignments", {
       method: "POST",
@@ -73,9 +75,54 @@ export default function AddToDaySheet({
     });
     if (res.ok) {
       setOnDay((prev) => new Set(prev).add(taskId));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
       onAdded();
     }
     setAddingId(null);
+  }
+
+  function toggle(taskId: string) {
+    if (onDay.has(taskId) || adding || addingId) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }
+
+  function toggleRoom(room: Room) {
+    const ids = room.tasks.map((t) => t.id).filter((id) => !onDay.has(id));
+    if (ids.length === 0 || adding || addingId) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allOn = ids.every((id) => next.has(id));
+      for (const id of ids) {
+        if (allOn) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function addSelected() {
+    const taskIds = [...selected].filter((id) => !onDay.has(id));
+    if (taskIds.length === 0 || adding || addingId) return;
+    setAdding(true);
+    const res = await fetch("/api/assignments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskIds, date }),
+    });
+    setAdding(false);
+    if (res.ok) {
+      onAdded();
+      onClose();
+    }
   }
 
   async function addOneOff(e: React.FormEvent) {
@@ -94,7 +141,10 @@ export default function AddToDaySheet({
       }),
     });
     setSavingOneOff(false);
-    if (res.ok) onAdded();
+    if (res.ok) {
+      onAdded();
+      onClose();
+    }
   }
 
   return (
@@ -179,7 +229,7 @@ export default function AddToDaySheet({
         </form>
 
         <div className="pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-          <p className="text-sm font-medium mb-3">Or pick a chore</p>
+          <p className="text-sm font-medium mb-3">Or pick chores</p>
           <label className="relative block mb-3">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text3)" }} />
             <input
@@ -198,37 +248,90 @@ export default function AddToDaySheet({
                 {query ? "No matching chores" : "No catalog chores yet"}
               </p>
             )}
-            {filtered.map((room) => (
+            {filtered.map((room) => {
+              const pickable = room.tasks.filter((t) => !onDay.has(t.id));
+              const allPicked = pickable.length > 0 && pickable.every((t) => selected.has(t.id));
+              return (
               <div key={room.id}>
-                <p className="text-xs font-medium mb-1.5" style={{ color: "var(--text3)" }}>
-                  {room.icon} {room.name}
-                </p>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <p className="text-xs font-medium" style={{ color: "var(--text3)" }}>
+                    {room.icon} {room.name}
+                  </p>
+                  {pickable.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => toggleRoom(room)}
+                      className="text-xs"
+                      style={{ color: "var(--text3)" }}
+                    >
+                      {allPicked ? "Clear" : "All"}
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-1">
                   {room.tasks.map((task) => {
                     const added = onDay.has(task.id);
+                    const busy = adding || addingId !== null;
                     return (
-                      <button
+                      <div
                         key={task.id}
-                        type="button"
-                        onClick={() => addCatalog(task.id)}
-                        disabled={added || addingId === task.id}
-                        className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-left text-sm"
+                        className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm"
                         style={{
                           background: "var(--surface2)",
                           color: added ? "var(--text3)" : "var(--text)",
                         }}
                       >
+                        <input
+                          type="checkbox"
+                          checked={added || selected.has(task.id)}
+                          disabled={added || busy}
+                          onChange={() => toggle(task.id)}
+                          className="shrink-0"
+                          aria-label={`Select ${task.name}`}
+                        />
                         <span className="flex-1 min-w-0 truncate">{task.name}</span>
-                        {added
-                          ? <Check size={16} style={{ color: "var(--green)" }} />
-                          : <Plus size={16} style={{ color: "var(--text3)" }} />}
-                      </button>
+                        {added ? (
+                          <Check size={16} className="shrink-0" style={{ color: "var(--green)" }} />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => addCatalog(task.id)}
+                            disabled={busy}
+                            className="shrink-0 p-1 -mr-1 rounded-lg"
+                            aria-label={`Add ${task.name} now`}
+                          >
+                            <Plus size={16} style={{ color: "var(--text3)" }} />
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
+          {selected.size > 0 && (
+            <div className="sticky bottom-0 pt-3 mt-3 flex gap-2" style={{ background: "var(--surface)" }}>
+              <button
+                type="button"
+                onClick={addSelected}
+                disabled={adding}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-white"
+                style={{ background: "var(--accent)" }}
+              >
+                {adding ? "Adding…" : `Add ${selected.size} chore${selected.size === 1 ? "" : "s"}`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="px-4 py-2.5 rounded-xl text-sm"
+                style={{ color: "var(--text3)" }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

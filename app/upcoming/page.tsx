@@ -456,7 +456,7 @@ export default function UpcomingPage() {
           users={users}
           defaultUserId={me?.id}
           onClose={() => setAddingDate(null)}
-          onAdded={() => { setAddingDate(null); load(); }}
+          onAdded={() => load()}
         />
       )}
     </div>

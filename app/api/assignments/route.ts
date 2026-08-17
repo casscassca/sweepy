@@ -62,12 +62,21 @@ export async function POST(req: Request) {
     return NextResponse.json(result, { status: 201 });
   }
 
-  if (typeof body.taskId !== "string" || !body.taskId) {
+  const taskIds = Array.isArray(body.taskIds)
+    ? body.taskIds.filter((id: unknown) => typeof id === "string" && id)
+    : typeof body.taskId === "string" && body.taskId
+      ? [body.taskId]
+      : [];
+  if (taskIds.length === 0) {
     return NextResponse.json({ ok: false, reason: "taskId required" }, { status: 400 });
   }
   const cookieStore = await cookies();
   const userId = await verifySessionToken(cookieStore.get(COOKIE_NAME)?.value);
-  const result = await addTaskToDate(body.taskId, day, userId ?? undefined);
-  if (!result.ok) return NextResponse.json(result, { status: result.status });
-  return NextResponse.json(result);
+  const results = [];
+  for (const taskId of taskIds) {
+    const result = await addTaskToDate(taskId, day, userId ?? undefined);
+    if (!result.ok) return NextResponse.json(result, { status: result.status });
+    results.push(result);
+  }
+  return NextResponse.json(taskIds.length === 1 ? results[0] : { ok: true, added: results.length });
 }
