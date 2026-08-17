@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { uncompleteFromLog } from "@/lib/complete";
 
 const PAGE = 60;
 
@@ -31,4 +32,13 @@ export async function GET(req: Request) {
     entries: page,
     nextBefore,
   });
+}
+
+export async function DELETE(req: Request) {
+  const { id } = await req.json().catch(() => ({}));
+  if (typeof id !== "string" || !id) {
+    return NextResponse.json({ ok: false, reason: "id required" }, { status: 400 });
+  }
+  await uncompleteFromLog(id);
+  return NextResponse.json({ ok: true });
 }

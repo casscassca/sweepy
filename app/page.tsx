@@ -6,11 +6,12 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, CheckCircle2, Circle, Pin, Plus, RefreshCw, Star, UserCheck, Users, X } from "lucide-react";
+import { GripVertical, CheckCircle2, Circle, Eye, EyeOff, Pin, Plus, RefreshCw, Star, UserCheck, Users, X } from "lucide-react";
 import AddToDaySheet from "@/components/AddToDaySheet";
 import CompleteAsMenu from "@/components/CompleteAsMenu";
 import PersonMenu from "@/components/PersonMenu";
 import TaskNote from "@/components/TaskNote";
+import { useHideDone } from "@/lib/hide-done";
 
 type User = { id: string; name: string; color: string; dailyCapacity: number; dailyTaskLimit?: number };
 type Task = { id: string; name: string; difficulty: number; oneOff?: boolean; important?: boolean; notes?: string; room: { name: string } | null };
@@ -132,17 +133,22 @@ export default function TodayPage() {
   const [meId, setMeId] = useState<string | undefined>();
   const [running, setRunning] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [hideDone, setHideDone] = useHideDone();
   const today = format(new Date(), "yyyy-MM-dd");
 
-  const grouped = users.map((u) => ({
-    user: u,
-    items: assignments.filter((a) => a.userId === u.id).sort((a, b) => {
+  const grouped = users.map((u) => {
+    const all = assignments.filter((a) => a.userId === u.id).sort((a, b) => {
       const aImp = !a.completedAt && a.task.important ? 1 : 0;
       const bImp = !b.completedAt && b.task.important ? 1 : 0;
       if (aImp !== bImp) return bImp - aImp;
       return a.order - b.order;
-    }),
-  }));
+    });
+    return {
+      user: u,
+      all,
+      items: hideDone ? all.filter((a) => !a.completedAt) : all,
+    };
+  });
 
   const totalDone = assignments.filter((a) => a.completedAt).length;
   const total = assignments.length;
@@ -244,6 +250,17 @@ export default function TodayPage() {
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
+            onClick={() => setHideDone((v) => !v)}
+            className="flex items-center justify-center w-10 h-10 rounded-xl"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: hideDone ? "var(--accent)" : "var(--text2)", boxShadow: "var(--shadow)" }}
+            aria-pressed={hideDone}
+            aria-label={hideDone ? "Show completed" : "Hide completed"}
+            title={hideDone ? "Show completed" : "Hide completed"}
+          >
+            {hideDone ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+          <button
+            type="button"
             onClick={() => setAdding(true)}
             className="flex items-center justify-center w-10 h-10 rounded-xl"
             style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)", boxShadow: "var(--shadow)" }}
@@ -273,13 +290,13 @@ export default function TodayPage() {
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="grid gap-6 md:grid-cols-2">
-            {grouped.map(({ user, items }) => (
+            {grouped.map(({ user, items, all }) => (
               <div key={user.id}>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0" style={{ background: user.color + "22", color: user.color }}>{user.name[0]}</span>
                   <span className="font-medium">{user.name}</span>
                   <span className="text-xs ml-auto" style={{ color: "var(--text3)" }}>
-                    {items.filter((i) => i.completedAt).length}/{items.length} · {items.reduce((s, i) => s + i.task.difficulty, 0)}/{user.dailyCapacity} pts
+                    {all.filter((i) => i.completedAt).length}/{all.length} · {all.reduce((s, i) => s + i.task.difficulty, 0)}/{user.dailyCapacity} pts
                   </span>
                 </div>
                 <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
@@ -287,7 +304,7 @@ export default function TodayPage() {
                     <SortableItem key={a.id} assignment={a} users={users} meId={meId} onComplete={complete} onUncomplete={uncomplete} onRemove={remove} onPin={pin} onReassign={reassign} />
                   ))}
                 </SortableContext>
-                {items.length === 0 && (
+                {all.length === 0 && (
                   <div className="text-sm py-8 text-center rounded-xl" style={{ color: "var(--text3)", border: "1px dashed var(--border)" }}>Drag tasks here</div>
                 )}
               </div>

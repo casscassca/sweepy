@@ -197,8 +197,8 @@ export default function UsersPage() {
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => notifyNow(user)} title="Clear this person's phone notifies and resend today's list" aria-label="Resend notifies" className="p-2 rounded-xl" style={{ color: "var(--text3)" }}><Bell size={14} /></button>
-                  <button onClick={() => setShowToken(showToken === user.id ? null : user.id)} title="Webhook token" aria-label="Webhook token" className="p-2 rounded-xl" style={{ color: showToken === user.id ? "var(--accent)" : "var(--text3)" }}><KeyRound size={14} /></button>
+                  <button onClick={() => notifyNow(user)} title="Clear this person's phone notifies and resend today's list" aria-label="Resend notifies" className="p-2 rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }}><Bell size={14} /></button>
+                  <button onClick={() => setShowToken(showToken === user.id ? null : user.id)} title="Webhook token" aria-label="Webhook token" className={`p-2 rounded-xl transition-opacity ${showToken === user.id ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100"}`} style={{ color: showToken === user.id ? "var(--accent)" : "var(--text3)" }}><KeyRound size={14} /></button>
                   <button onClick={() => startEdit(user)} className="p-2 rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }} aria-label="Edit person"><Pencil size={14} /></button>
                   <button onClick={() => remove(user.id)} className="p-2 rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--red)" }} aria-label="Remove person"><Trash2 size={14} /></button>
                 </div>

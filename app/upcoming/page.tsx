@@ -16,6 +16,7 @@ import CompleteAsMenu from "@/components/CompleteAsMenu";
 import PersonMenu from "@/components/PersonMenu";
 import TaskNote from "@/components/TaskNote";
 import type { TaskFormTask } from "@/components/TaskFormFields";
+import { useHideDone } from "@/lib/hide-done";
 
 type User = { id: string; name: string; color: string };
 type Task = TaskFormTask & { room: { name: string } | null; oneOff?: boolean };
@@ -237,6 +238,7 @@ export default function UpcomingPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [addingDate, setAddingDate] = useState<string | null>(null);
+  const [hideDone, setHideDone] = useHideDone();
 
   async function load() {
     setLoading(true);
@@ -320,12 +322,13 @@ export default function UpcomingPage() {
   }
 
   const others = users.filter((u) => u.id !== me?.id);
-  const visible = who === "all"
+  const byWho = who === "all"
     ? assignments
     : who === "me"
       ? assignments.filter((a) => a.userId === me?.id)
       : assignments.filter((a) => a.userId === who);
-  const totalDone = visible.filter((a) => a.completedAt).length;
+  const visible = hideDone ? byWho.filter((a) => !a.completedAt) : byWho;
+  const totalDone = byWho.filter((a) => a.completedAt).length;
 
   return (
     <div>
@@ -333,7 +336,7 @@ export default function UpcomingPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Upcoming</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>
-            Next 7 days · {visible.length} tasks · {totalDone} done
+            Next 7 days · {byWho.length} tasks · {totalDone} done
           </p>
         </div>
         <button onClick={load} disabled={loading} className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)", boxShadow: "var(--shadow)" }}>
@@ -356,6 +359,11 @@ export default function UpcomingPage() {
             onClick={() => setWho(u.id)}
           />
         ))}
+        <FilterChip
+          label={hideDone ? "Show done" : "Hide done"}
+          active={hideDone}
+          onClick={() => setHideDone((v) => !v)}
+        />
       </div>
 
       {loading ? (

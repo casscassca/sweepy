@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, RotateCcw } from "lucide-react";
 
 type Person = { id: string; name: string; color: string };
 type Entry = {
@@ -53,6 +53,7 @@ export default function HistoryPage() {
   const [nextBefore, setNextBefore] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [undoingId, setUndoingId] = useState<string | null>(null);
 
   async function load(reset: boolean, before?: string | null) {
     if (reset) setLoading(true);
@@ -73,6 +74,18 @@ export default function HistoryPage() {
   }
 
   useEffect(() => { load(true); }, [who]);
+
+  async function undo(id: string) {
+    if (undoingId) return;
+    setUndoingId(id);
+    const res = await fetch("/api/history", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    setUndoingId(null);
+    if (res.ok) setEntries((prev) => prev.filter((e) => e.id !== id));
+  }
 
   const groups = useMemo(() => {
     const byDay = new Map<string, Entry[]>();
@@ -136,7 +149,7 @@ export default function HistoryPage() {
                 {items.map((entry) => (
                   <li
                     key={entry.id}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl group"
                     style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}
                   >
                     <span className="text-xs tabular-nums w-16 shrink-0" style={{ color: "var(--text3)" }}>
@@ -168,6 +181,17 @@ export default function HistoryPage() {
                         )}
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => undo(entry.id)}
+                      disabled={undoingId === entry.id}
+                      className="p-2 rounded-lg shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                      style={{ color: "var(--text3)" }}
+                      title="Undo this completion"
+                      aria-label={`Undo ${entry.task.name}`}
+                    >
+                      <RotateCcw size={16} />
+                    </button>
                   </li>
                 ))}
               </ol>
