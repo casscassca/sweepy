@@ -22,7 +22,7 @@ const DIFF_LABEL = ["", "quick", "medium", "big job"];
 
 function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRemove, onPin, onReassign }: {
   assignment: Assignment; users: User[]; meId?: string;
-  onComplete: (id: string, by: string, date?: string) => void;
+  onComplete: (id: string, by: string | null, date?: string) => void;
   onUncomplete: (id: string) => void;
   onRemove: (id: string) => void;
   onPin: (id: string, pinned: boolean) => void;
@@ -173,7 +173,7 @@ export default function TodayPage() {
     await load(); setRunning(false);
   }
 
-  async function complete(assignmentId: string, completedById: string, completedAt?: string) {
+  async function complete(assignmentId: string, completedById: string | null, completedAt?: string) {
     await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt }) });
     load();
   }

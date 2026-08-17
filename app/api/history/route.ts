@@ -12,7 +12,7 @@ export async function GET(req: Request) {
 
   const entries = await prisma.completionLog.findMany({
     where: {
-      ...(userId ? { completedById: userId } : {}),
+      ...(userId ? { OR: [{ completedById: userId }, { completedById: null }] } : {}),
       ...(beforeDate ? { completedAt: { lt: beforeDate } } : {}),
     },
     include: {

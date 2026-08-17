@@ -10,7 +10,7 @@ type Entry = {
   completedAt: string;
   task: { name: string; oneOff: boolean; difficulty: number; room: { name: string } | null };
   user: Person;
-  completedBy: Person;
+  completedBy: Person | null;
 };
 
 const DIFF_COLOR = ["", "#a78bfa", "#fb923c", "#f87171"];
@@ -159,8 +159,25 @@ export default function HistoryPage() {
                       <p className="text-sm truncate">{entry.task.name}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text3)" }}>
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: entry.completedBy.color }} />
-                          {entry.completedBy.name}
+                          {entry.completedBy ? (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: entry.completedBy.color }} />
+                              {entry.completedBy.name}
+                            </>
+                          ) : (
+                            <>
+                              <span className="flex items-center shrink-0">
+                                {users.slice(0, 2).map((u, i) => (
+                                  <span
+                                    key={u.id}
+                                    className="w-1.5 h-1.5 rounded-full"
+                                    style={{ background: u.color, marginLeft: i === 0 ? 0 : -2 }}
+                                  />
+                                ))}
+                              </span>
+                              Both
+                            </>
+                          )}
                         </span>
                         <span className="text-xs" style={{ color: "var(--text3)" }}>
                           {entry.task.oneOff ? "one-off" : entry.task.room?.name}
@@ -174,11 +191,6 @@ export default function HistoryPage() {
                         >
                           {DIFF_LABEL[entry.task.difficulty]}
                         </span>
-                        {entry.user.id !== entry.completedBy.id && (
-                          <span className="text-xs" style={{ color: "var(--text3)" }}>
-                            for {entry.user.name}
-                          </span>
-                        )}
                       </div>
                     </div>
                     <button

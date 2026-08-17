@@ -12,7 +12,7 @@ export default function CompleteAsMenu({
 }: {
   users: Person[];
   defaultDate?: string;
-  onPick: (userId: string, date: string) => void;
+  onPick: (userId: string | null, date: string) => void;
   onClose: () => void;
 }) {
   const today = format(new Date(), "yyyy-MM-dd");
@@ -45,6 +45,24 @@ export default function CompleteAsMenu({
           {u.name}
         </button>
       ))}
+      {users.length > 1 && (
+        <button
+          type="button"
+          onClick={() => onPick(null, date)}
+          className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-black/5"
+        >
+          <span className="flex items-center shrink-0">
+            {users.slice(0, 2).map((u, i) => (
+              <span
+                key={u.id}
+                className="w-2 h-2 rounded-full"
+                style={{ background: u.color, marginLeft: i === 0 ? 0 : -3 }}
+              />
+            ))}
+          </span>
+          Both
+        </button>
+      )}
       <button type="button" onClick={onClose} className="w-full text-xs px-2 py-1 mt-0.5 rounded-lg" style={{ color: "var(--text3)" }}>
         Cancel
       </button>

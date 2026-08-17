@@ -15,7 +15,8 @@ export async function POST(req: Request) {
   const { assignmentId, completedById, completedAt: rawDate } = await req.json();
   const completedAt = completedAtFrom(rawDate);
   const date = typeof rawDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : undefined;
-  const result = await completeAssignment({ assignmentId, completedById, completedAt, date });
+  const by = typeof completedById === "string" && completedById ? completedById : null;
+  const result = await completeAssignment({ assignmentId, completedById: by, completedAt, date });
   if (!result.ok) return NextResponse.json(result, { status: result.status });
   return NextResponse.json({ ok: true });
 }

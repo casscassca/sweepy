@@ -4,7 +4,7 @@ import { holdAssignmentOnDate } from "./scheduler";
 
 export async function completeAssignment(opts: {
   assignmentId: string;
-  completedById: string;
+  completedById?: string | null;
   completedAt: Date;
   date?: string;
 }) {
@@ -18,9 +18,13 @@ export async function completeAssignment(opts: {
     id = moved.id;
   }
 
+  const completedById = typeof opts.completedById === "string" && opts.completedById
+    ? opts.completedById
+    : null;
+
   const assignment = await prisma.dailyAssignment.update({
     where: { id },
-    data: { completedAt: opts.completedAt, completedById: opts.completedById, remindAt: null },
+    data: { completedAt: opts.completedAt, completedById, remindAt: null },
   });
 
   await prisma.task.update({
@@ -32,7 +36,7 @@ export async function completeAssignment(opts: {
     data: {
       taskId: assignment.taskId,
       userId: assignment.userId,
-      completedById: opts.completedById,
+      completedById,
       completedAt: opts.completedAt,
     },
   });

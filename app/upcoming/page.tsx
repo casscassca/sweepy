@@ -35,7 +35,7 @@ function dayLabel(dateStr: string) {
 
 function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove, onEdit, onReassign, onPin, dragHandleProps, isDragOverlay }: {
   assignment: Assignment; users: User[]; meId?: string;
-  onComplete?: (id: string, by: string, date?: string) => void;
+  onComplete?: (id: string, by: string | null, date?: string) => void;
   onUncomplete?: (id: string) => void;
   onRemove?: (id: string) => void;
   onEdit?: (task: Task) => void;
@@ -255,7 +255,7 @@ export default function UpcomingPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function complete(assignmentId: string, completedById: string, completedAt?: string) {
+  async function complete(assignmentId: string, completedById: string | null, completedAt?: string) {
     await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt }) });
     load();
   }

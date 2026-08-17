@@ -90,11 +90,11 @@ model CompletionLog {
   id            String   @id @default(cuid())
   taskId        String
   userId        String
-  completedById String
+  completedById String?
   completedAt   DateTime @default(now())
   task          Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  completedBy   User     @relation("CompletedFor", fields: [completedById], references: [id], onDelete: Cascade)
+  completedBy   User?    @relation("CompletedFor", fields: [completedById], references: [id], onDelete: Cascade)
 }
 
 model Settings {
