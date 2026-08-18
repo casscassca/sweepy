@@ -16,6 +16,7 @@ export type TaskFormTask = {
   lastDoneAt: string | null;
   allowedDays: string | null;
   important?: boolean;
+  dueOnly?: boolean;
   notes?: string;
   assignableUsers: { user: TaskFormUser }[];
 };
@@ -34,6 +35,7 @@ export function parseTaskForm(form: HTMLFormElement) {
   const dirtRatio = Number((form.elements.namedItem("dirtRatio") as HTMLInputElement).value);
   const lastDone = lastDoneAtFromRatio(dirtRatio, frequencyDays);
   const important = (form.elements.namedItem("important") as HTMLInputElement)?.checked ?? false;
+  const dueOnly = (form.elements.namedItem("dueOnly") as HTMLInputElement)?.checked ?? false;
   const notes = ((form.elements.namedItem("notes") as HTMLTextAreaElement)?.value ?? "").trim();
   return {
     name,
@@ -43,6 +45,7 @@ export function parseTaskForm(form: HTMLFormElement) {
     assignableUserIds: selected,
     lastDoneAt: lastDone ? lastDone.toISOString() : null,
     important,
+    dueOnly,
     notes,
   };
 }
@@ -74,6 +77,15 @@ export default function TaskFormFields({
           Important
           <span className="block text-xs font-normal mt-0.5" style={{ color: "var(--text3)" }}>
             Once due, stays at the top of the list until it’s done
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2.5 text-sm cursor-pointer">
+        <input type="checkbox" name="dueOnly" defaultChecked={task?.dueOnly ?? false} className="mt-0.5" />
+        <span>
+          Only when due
+          <span className="block text-xs font-normal mt-0.5" style={{ color: "var(--text3)" }}>
+            Don’t put this on the list until the full interval has passed
           </span>
         </span>
       </label>

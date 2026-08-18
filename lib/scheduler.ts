@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 import { haConfig, listHaNotifyCatalog, postNotify, resolveNotifyTarget } from "./ha";
 import { appendIntegrationLog } from "./integration-log";
-import { DIRT_SHOW_AT, dirtinessRatio, isDirtyEnough } from "./dirtiness";
+import { dirtinessRatio, isDirtyEnough, showAt } from "./dirtiness";
 import { addDays, format, getDay, parseISO } from "date-fns";
 
 function todayStr() {
@@ -38,10 +38,10 @@ export async function dedupeOpenAssignments() {
 export async function dropCleanUnheldAssignments() {
   const open = await prisma.dailyAssignment.findMany({
     where: { completedAt: null, held: false },
-    include: { task: { select: { lastDoneAt: true, frequencyDays: true, oneOff: true } } },
+    include: { task: { select: { lastDoneAt: true, frequencyDays: true, oneOff: true, dueOnly: true } } },
   });
   const drop = open
-    .filter((a) => !a.task.oneOff && !isDirtyEnough(a.task.lastDoneAt, a.task.frequencyDays, new Date(`${a.date}T12:00:00`)))
+    .filter((a) => !a.task.oneOff && !isDirtyEnough(a.task.lastDoneAt, a.task.frequencyDays, new Date(`${a.date}T12:00:00`), a.task.dueOnly))
     .map((a) => a.id);
   if (drop.length > 0) {
     await prisma.dailyAssignment.deleteMany({ where: { id: { in: drop } } });
@@ -286,7 +286,7 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
       exclusive: t.assignableUsers.length === 1,
       important: t.important,
     }))
-    .filter(({ dirt }) => dirt >= DIRT_SHOW_AT)
+    .filter(({ dirt, task }) => dirt >= showAt(task.dueOnly))
     .sort((a, b) => {
       if (a.important !== b.important) return a.important ? -1 : 1;
       if (a.exclusive !== b.exclusive) return a.exclusive ? -1 : 1;
@@ -594,7 +594,7 @@ async function assignNextForUser(userId: string, date: string, pointsLeft: numbe
       dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, targetDate),
       exclusive: t.assignableUsers.length === 1,
     }))
-    .filter(({ dirt, task }) => dirt >= DIRT_SHOW_AT && task.difficulty <= pointsLeft)
+    .filter(({ dirt, task }) => dirt >= showAt(task.dueOnly) && task.difficulty <= pointsLeft)
     .sort((a, b) => {
       if (a.task.important !== b.task.important) return a.task.important ? -1 : 1;
       if (a.exclusive !== b.exclusive) return a.exclusive ? -1 : 1;

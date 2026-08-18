@@ -21,12 +21,17 @@ export function dirtinessRatio(
   return Math.min(DIRT_MAX, Math.max(0, daysSince / frequencyDays));
 }
 
+export function showAt(dueOnly?: boolean) {
+  return dueOnly ? 1 : DIRT_SHOW_AT;
+}
+
 export function isDirtyEnough(
   lastDoneAt: Date | string | null,
   frequencyDays: number,
   asOf: Date = new Date(),
+  dueOnly = false,
 ): boolean {
-  return dirtinessRatio(lastDoneAt, frequencyDays, asOf) >= DIRT_SHOW_AT;
+  return dirtinessRatio(lastDoneAt, frequencyDays, asOf) >= showAt(dueOnly);
 }
 
 export function lastDoneAtFromRatio(ratio: number, frequencyDays: number, asOf: Date = new Date()): Date | null {

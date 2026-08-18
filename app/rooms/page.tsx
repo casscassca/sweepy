@@ -16,6 +16,7 @@ type Task = {
   lastDoneAt: string | null;
   allowedDays: string | null;
   important?: boolean;
+  dueOnly?: boolean;
   notes?: string;
   assignableUsers: { user: User }[];
 };

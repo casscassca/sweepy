@@ -27,6 +27,7 @@ model Task {
   lastDoneAt    DateTime?
   oneOff        Boolean  @default(false)
   important     Boolean  @default(false)
+  dueOnly       Boolean  @default(false)
   notes         String   @default("")
   createdAt     DateTime @default(now())
   assignableUsers TaskAssignableUser[]
