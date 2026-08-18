@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Check, Star } from "lucide-react";
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Check, Search, Star } from "lucide-react";
 import TaskFormFields, { FREQ_OPTIONS, parseTaskForm } from "@/components/TaskFormFields";
 import RoomDirtGauge from "@/components/RoomDirtGauge";
 import DirtGauge from "@/components/DirtGauge";
@@ -55,6 +55,7 @@ export default function RoomsPage() {
   const [editingTask, setEditingTask] = useState<(Task & { roomId: string }) | null>(null);
   const [onToday, setOnToday] = useState<Set<string>>(new Set());
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   async function load() {
     const today = format(new Date(), "yyyy-MM-dd");
@@ -136,23 +137,49 @@ export default function RoomsPage() {
   }
 
   const isRoomFormOpen = showRoomForm || !!editingRoom;
+  const q = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    if (!q) return rooms;
+    return rooms
+      .map((room) => {
+        const roomMatch = room.name.toLowerCase().includes(q);
+        const tasks = roomMatch
+          ? room.tasks
+          : room.tasks.filter((t) => t.name.toLowerCase().includes(q));
+        return { ...room, tasks };
+      })
+      .filter((room) => room.name.toLowerCase().includes(q) || room.tasks.length > 0);
+  }, [rooms, q]);
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 mb-8">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Rooms & Tasks</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>
             {rooms.length} rooms · {rooms.reduce((s, r) => s + r.tasks.length, 0)} tasks
           </p>
         </div>
-        <button
-          onClick={() => { setShowRoomForm(true); setEditingRoom(null); setRoomName(""); setRoomIcon("🏠"); }}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium text-white transition-colors shrink-0"
-          style={{ background: "var(--accent)" }}
-        >
-          <Plus size={14} /> Add Room
-        </button>
+        <div className="flex items-center gap-2 flex-1 sm:flex-initial min-w-0 justify-end">
+          <label className="relative block flex-1 sm:w-56 min-w-0">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text3)" }} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full"
+              style={{ paddingLeft: 36 }}
+              placeholder="Search rooms or tasks…"
+              aria-label="Search rooms or tasks"
+            />
+          </label>
+          <button
+            onClick={() => { setShowRoomForm(true); setEditingRoom(null); setRoomName(""); setRoomIcon("🏠"); }}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium text-white transition-colors shrink-0"
+            style={{ background: "var(--accent)" }}
+          >
+            <Plus size={14} /> Add Room
+          </button>
+        </div>
       </div>
 
       {isRoomFormOpen && (
@@ -200,7 +227,7 @@ export default function RoomsPage() {
       )}
 
       <div className="space-y-2">
-        {rooms.map((room) => (
+        {filtered.map((room) => (
           <div
             key={room.id}
             className="rounded-2xl overflow-hidden"
@@ -233,13 +260,13 @@ export default function RoomsPage() {
               >
                 <Trash2 size={13} />
               </button>
-              {expanded[room.id]
+              {expanded[room.id] || q
                 ? <ChevronDown size={14} style={{ color: "var(--text3)" }} />
                 : <ChevronRight size={14} style={{ color: "var(--text3)" }} />
               }
             </div>
 
-            {expanded[room.id] && (
+            {(expanded[room.id] || !!q) && (
               <div style={{ borderTop: "1px solid var(--border)" }}>
                 {room.tasks.map((task) => (
                   <div key={task.id} style={{ borderBottom: "1px solid var(--border)" }}>
@@ -322,11 +349,13 @@ export default function RoomsPage() {
           </div>
         ))}
 
-        {rooms.length === 0 && (
+        {filtered.length === 0 && (
           <div className="text-center py-20" style={{ color: "var(--text2)" }}>
-            <p className="text-4xl mb-3">🏠</p>
-            <p className="font-medium">No rooms yet</p>
-            <p className="text-sm mt-1" style={{ color: "var(--text3)" }}>Add a room to get started</p>
+            <p className="text-4xl mb-3">{q ? "🔍" : "🏠"}</p>
+            <p className="font-medium">{q ? "No matching rooms or tasks" : "No rooms yet"}</p>
+            <p className="text-sm mt-1" style={{ color: "var(--text3)" }}>
+              {q ? "Try a different name" : "Add a room to get started"}
+            </p>
           </div>
         )}
       </div>
