@@ -256,7 +256,7 @@ export default function UpcomingPage() {
   useEffect(() => { load(); }, []);
 
   async function complete(assignmentId: string, completedById: string | null, completedAt?: string) {
-    await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt }) });
+    await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt: completedAt ?? days[0] }) });
     load();
   }
 
@@ -420,8 +420,8 @@ export default function UpcomingPage() {
                           assignment={a}
                           users={users}
                           meId={me?.id}
-                          onComplete={isCurrentDay ? complete : undefined}
-                          onUncomplete={isCurrentDay ? uncomplete : undefined}
+                          onComplete={complete}
+                          onUncomplete={uncomplete}
                           onRemove={remove}
                           onEdit={a.task.oneOff ? undefined : setEditingTask}
                           onReassign={reassign}

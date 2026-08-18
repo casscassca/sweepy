@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Check, Search, Star } from "lucide-react";
+import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Check, CheckCircle2, Circle, Search, Star, UserCheck } from "lucide-react";
 import TaskFormFields, { formatFrequency, parseTaskForm } from "@/components/TaskFormFields";
+import CompleteAsMenu from "@/components/CompleteAsMenu";
 import RoomDirtGauge from "@/components/RoomDirtGauge";
 import DirtGauge from "@/components/DirtGauge";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
@@ -44,6 +45,121 @@ function DiffBadge({ n }: { n: number }) {
   );
 }
 
+function doneOn(lastDoneAt: string | null, day: string) {
+  return !!lastDoneAt && format(new Date(lastDoneAt), "yyyy-MM-dd") === day;
+}
+
+function CatalogTaskRow({
+  task,
+  users,
+  meId,
+  today,
+  onToday,
+  adding,
+  onAddToday,
+  onComplete,
+  onUncomplete,
+  onEdit,
+  onDelete,
+}: {
+  task: Task;
+  users: User[];
+  meId?: string;
+  today: string;
+  onToday: boolean;
+  adding: boolean;
+  onAddToday: () => void;
+  onComplete: (by: string | null, date?: string) => void;
+  onUncomplete: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [showWho, setShowWho] = useState(false);
+  const done = doneOn(task.lastDoneAt, today);
+
+  function markMine() {
+    if (meId) onComplete(meId);
+    else setShowWho(true);
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-3 group/task relative">
+      <button
+        type="button"
+        onClick={() => { if (done) onUncomplete(); else markMine(); }}
+        aria-label={done ? "Mark incomplete" : "Mark complete"}
+        className="shrink-0 min-h-11 w-9 flex items-center justify-center"
+        style={{ color: done ? "var(--green)" : "var(--text3)" }}
+      >
+        {done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+      </button>
+      <DirtGauge
+        ratio={dirtinessRatio(task.lastDoneAt, task.frequencyDays)}
+        title={dirtDetail(task.lastDoneAt, task.frequencyDays)}
+      />
+      <div className="flex-1 min-w-0">
+        <div
+          className="text-sm font-medium inline-flex items-center gap-1.5"
+          style={{ opacity: done ? 0.35 : 1, textDecoration: done ? "line-through" : "none" }}
+        >
+          {task.important && (
+            <Star size={12} fill="currentColor" className="shrink-0" style={{ color: "var(--accent)", textDecoration: "none" }} />
+          )}
+          {task.name}
+        </div>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          <DiffBadge n={task.difficulty} />
+          <span className="text-xs" style={{ color: "var(--text3)" }}>{freqLabel(task.frequencyDays)}</span>
+          {task.notes?.trim() && (
+            <span className="text-xs" style={{ color: "var(--text3)" }}>note</span>
+          )}
+          {task.allowedDays && (
+            <span className="text-xs" style={{ color: "var(--text3)" }}>{formatAllowedDays(task.allowedDays)}</span>
+          )}
+          {task.assignableUsers.length > 0 && (
+            <span className="text-xs" style={{ color: "var(--text3)" }}>
+              → {task.assignableUsers.map((au) => au.user.name).join(", ")}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover/task:opacity-100 transition-opacity">
+        {!done && (
+          <button
+            type="button"
+            onClick={() => setShowWho(true)}
+            className="p-2 rounded-lg"
+            style={{ color: "var(--text3)" }}
+            title="Done as someone else"
+            aria-label="Mark done as someone else"
+          >
+            <UserCheck size={16} />
+          </button>
+        )}
+        <button
+          onClick={onAddToday}
+          disabled={adding}
+          className="p-2 rounded-lg"
+          style={{ color: onToday ? "var(--green)" : "var(--text3)" }}
+          title={onToday ? "On today" : "Add to today"}
+          aria-label={onToday ? "Already on today" : "Add to today"}
+        >
+          {onToday ? <Check size={14} /> : <Plus size={14} />}
+        </button>
+        <button onClick={onEdit} className="p-2 rounded-lg" style={{ color: "var(--text3)" }} aria-label="Edit task"><Pencil size={13} /></button>
+        <button onClick={onDelete} className="p-2 rounded-lg" style={{ color: "var(--red)" }} aria-label="Delete task"><Trash2 size={13} /></button>
+      </div>
+      {showWho && (
+        <CompleteAsMenu
+          users={users}
+          onPick={(userId, date) => { onComplete(userId, date); setShowWho(false); }}
+          onClose={() => setShowWho(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -57,17 +173,20 @@ export default function RoomsPage() {
   const [onToday, setOnToday] = useState<Set<string>>(new Set());
   const [addingId, setAddingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [meId, setMeId] = useState<string | undefined>();
+  const today = format(new Date(), "yyyy-MM-dd");
 
   async function load() {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const [r, u, a] = await Promise.all([
+    const [r, u, a, me] = await Promise.all([
       fetch("/api/rooms").then((r) => r.json()),
       fetch("/api/users").then((r) => r.json()),
       fetch(`/api/assignments?date=${today}&peek=1`).then((r) => r.json()),
+      fetch("/api/auth/me").then((r) => r.json().catch(() => ({}))),
     ]);
     setRooms(r);
     setUsers(u);
     setOnToday(new Set((Array.isArray(a) ? a : []).map((x: { task: { id: string } }) => x.task.id)));
+    setMeId(me.user?.id);
   }
 
   useEffect(() => { load(); }, []);
@@ -135,6 +254,24 @@ export default function RoomsPage() {
     });
     if (res.ok) setOnToday((prev) => new Set(prev).add(taskId));
     setAddingId(null);
+  }
+
+  async function completeTask(taskId: string, completedById: string | null, completedAt?: string) {
+    await fetch("/api/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId, completedById, completedAt }),
+    });
+    await load();
+  }
+
+  async function uncompleteTask(taskId: string) {
+    await fetch("/api/complete", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId }),
+    });
+    await load();
   }
 
   const isRoomFormOpen = showRoomForm || !!editingRoom;
@@ -280,50 +417,19 @@ export default function RoomsPage() {
                         </div>
                       </form>
                     ) : (
-                      <div className="flex items-center gap-3 px-4 py-3 group/task">
-                        <span className="w-7 shrink-0" aria-hidden />
-                        <DirtGauge
-                          ratio={dirtinessRatio(task.lastDoneAt, task.frequencyDays)}
-                          title={dirtDetail(task.lastDoneAt, task.frequencyDays)}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium inline-flex items-center gap-1.5">
-                            {task.important && (
-                              <Star size={12} fill="currentColor" className="shrink-0" style={{ color: "var(--accent)" }} />
-                            )}
-                            {task.name}
-                          </div>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <DiffBadge n={task.difficulty} />
-                            <span className="text-xs" style={{ color: "var(--text3)" }}>{freqLabel(task.frequencyDays)}</span>
-                            {task.notes?.trim() && (
-                              <span className="text-xs" style={{ color: "var(--text3)" }}>note</span>
-                            )}
-                            {task.allowedDays && (
-                              <span className="text-xs" style={{ color: "var(--text3)" }}>{formatAllowedDays(task.allowedDays)}</span>
-                            )}
-                            {task.assignableUsers.length > 0 && (
-                              <span className="text-xs" style={{ color: "var(--text3)" }}>
-                                → {task.assignableUsers.map((au) => au.user.name).join(", ")}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover/task:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => addToToday(task.id)}
-                            disabled={addingId === task.id}
-                            className="p-2 rounded-lg"
-                            style={{ color: onToday.has(task.id) ? "var(--green)" : "var(--text3)" }}
-                            title={onToday.has(task.id) ? "On today" : "Add to today"}
-                            aria-label={onToday.has(task.id) ? "Already on today" : "Add to today"}
-                          >
-                            {onToday.has(task.id) ? <Check size={14} /> : <Plus size={14} />}
-                          </button>
-                          <button onClick={() => setEditingTask({ ...task, roomId: room.id })} className="p-2 rounded-lg" style={{ color: "var(--text3)" }} aria-label="Edit task"><Pencil size={13} /></button>
-                          <button onClick={() => deleteTask(task.id)} className="p-2 rounded-lg" style={{ color: "var(--red)" }} aria-label="Delete task"><Trash2 size={13} /></button>
-                        </div>
-                      </div>
+                      <CatalogTaskRow
+                        task={task}
+                        users={users}
+                        meId={meId}
+                        today={today}
+                        onToday={onToday.has(task.id)}
+                        adding={addingId === task.id}
+                        onAddToday={() => addToToday(task.id)}
+                        onComplete={(by, date) => completeTask(task.id, by, date)}
+                        onUncomplete={() => uncompleteTask(task.id)}
+                        onEdit={() => setEditingTask({ ...task, roomId: room.id })}
+                        onDelete={() => deleteTask(task.id)}
+                      />
                     )}
                   </div>
                 ))}

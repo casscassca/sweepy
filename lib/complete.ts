@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { prisma } from "./prisma";
-import { dismissAssignmentNotify, holdAssignmentOnDate } from "./scheduler";
+import { addTaskToDate, dismissAssignmentNotify, holdAssignmentOnDate } from "./scheduler";
 
 export async function completeAssignment(opts: {
   assignmentId: string;
@@ -45,6 +45,34 @@ export async function completeAssignment(opts: {
   if (assignment.id !== opts.assignmentId) await dismissAssignmentNotify(assignment.id);
 
   return { ok: true as const, assignment };
+}
+
+/** Mark a catalog chore done from any page — uses the open assignment if there is one. */
+export async function completeTask(opts: {
+  taskId: string;
+  completedById?: string | null;
+  completedAt: Date;
+  date?: string;
+}) {
+  const date = opts.date ?? format(opts.completedAt, "yyyy-MM-dd");
+  const placed = await addTaskToDate(opts.taskId, date, opts.completedById ?? undefined);
+  if (!placed.ok) return placed;
+  if (!placed.assignment) return { ok: false as const, status: 404 as const, reason: "not found" };
+  if (placed.assignment.completedAt) return { ok: true as const, assignment: placed.assignment };
+  return completeAssignment({
+    assignmentId: placed.assignment.id,
+    completedById: opts.completedById,
+    completedAt: opts.completedAt,
+  });
+}
+
+export async function uncompleteTask(taskId: string) {
+  const latest = await prisma.completionLog.findFirst({
+    where: { taskId },
+    orderBy: [{ completedAt: "desc" }, { id: "desc" }],
+  });
+  if (!latest) return { ok: true as const };
+  return uncompleteFromLog(latest.id);
 }
 
 export async function uncompleteFromLog(logId: string) {
