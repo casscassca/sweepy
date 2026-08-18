@@ -38,7 +38,7 @@ export default function Nav() {
         style={{ background: "var(--bg2)", borderBottom: "1px solid var(--border)", boxShadow: "var(--shadow)" }}
       >
         <div className="max-w-4xl mx-auto px-4 md:px-5 flex items-center gap-1 h-14">
-          <Link href="/" className="flex items-center gap-2 mr-2 md:mr-5 shrink-0 min-h-11">
+          <Link href="/" prefetch={false} className="flex items-center gap-2 mr-2 md:mr-5 shrink-0 min-h-11">
             <img src="/mascot.png" alt="" width={40} height={47} className="h-10 w-auto" />
             <span className="font-semibold text-base tracking-tight" style={{ color: "var(--text)" }}>
               Sweepy
@@ -52,6 +52,7 @@ export default function Nav() {
                 <Link
                   key={l.href}
                   href={l.href}
+                  prefetch={false}
                   aria-current={active ? "page" : undefined}
                   className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
                   style={{
@@ -103,6 +104,7 @@ export default function Nav() {
               <Link
                 key={l.href}
                 href={l.href}
+                prefetch={false}
                 aria-current={active ? "page" : undefined}
                 className="flex flex-col items-center justify-center gap-0.5 min-h-14 text-[11px] font-medium"
                 style={{ color: active ? "var(--accent)" : "var(--text3)" }}
