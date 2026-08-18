@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { dropCleanUnheldAssignments } from "@/lib/scheduler";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,6 +32,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     include: { assignableUsers: { include: { user: true } } },
   });
 
+  await dropCleanUnheldAssignments();
   return NextResponse.json(task);
 }
 

@@ -68,12 +68,16 @@ function isManualStay(a: { pinned: boolean; held: boolean; task: { oneOff: boole
   return a.pinned || a.held || a.task.oneOff;
 }
 
+function staysOnItsDay(a: { pinned: boolean; held: boolean; task: { oneOff: boolean; dueOnly?: boolean } }) {
+  return isManualStay(a) || !!a.task.dueOnly;
+}
+
 /**
  * Auto-picks that overflow a person's daily points or task count slide forward.
  * Regular chores go first (cleanest first). Important autos only slide if
- * nothing else can. Pins, one-offs, and anything placed by hand stay put
- * and do not push other chores off the day — a day can go over capacity
- * on purpose.
+ * nothing else can. Pins, one-offs, due-only chores, and anything placed
+ * by hand stay put and do not push other chores off the day — a day can
+ * go over capacity on purpose.
  */
 export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
   const users = await prisma.user.findMany({ select: { id: true, dailyCapacity: true, dailyTaskLimit: true } });
@@ -86,7 +90,7 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
     const next = format(addDays(start, i + 1), "yyyy-MM-dd");
     const open = await prisma.dailyAssignment.findMany({
       where: { date, completedAt: null },
-      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, oneOff: true, important: true } } },
+      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, oneOff: true, important: true, dueOnly: true } } },
     });
 
     const byUser = new Map<string, typeof open>();
@@ -99,7 +103,7 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
     for (const [userId, items] of byUser) {
       const limit = cap.get(userId) ?? 6;
       const maxTasks = taskCap.get(userId) ?? 6;
-      const autos = items.filter((a) => !isManualStay(a));
+      const autos = items.filter((a) => !staysOnItsDay(a));
       const ranked = [...autos].sort((a, b) => {
         if (a.task.important !== b.task.important) return a.task.important ? 1 : -1;
         return dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays) -
@@ -306,32 +310,42 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
 
   const toCreate: Array<{ date: string; userId: string; taskId: string; order: number }> = [];
 
-  for (const { task } of eligible) {
+  const pickUser = (task: (typeof eligible)[number]["task"], allowOver: boolean) => {
     const assignableUserIds =
       task.assignableUsers.length > 0
         ? task.assignableUsers.map((au: { userId: string }) => au.userId)
         : users.map((u) => u.id);
 
     let bestUser: string | null = null;
-    let bestCapacity = -1;
+    let bestCapacity = allowOver ? Number.NEGATIVE_INFINITY : -1;
     for (const uid of assignableUserIds) {
       const cap = capacityLeft.get(uid) ?? 0;
       const slots = slotsLeft.get(uid) ?? 0;
-      if (slots < 1 || cap < task.difficulty) continue;
+      if (!allowOver && (slots < 1 || cap < task.difficulty)) continue;
       if (cap > bestCapacity) {
         bestCapacity = cap;
         bestUser = uid;
       }
     }
+    return bestUser;
+  };
 
-    if (!bestUser) continue;
+  const place = (items: typeof eligible, allowOver: boolean) => {
+    for (const { task } of items) {
+      const bestUser = pickUser(task, allowOver);
+      if (!bestUser) continue;
 
-    capacityLeft.set(bestUser, (capacityLeft.get(bestUser) ?? 0) - task.difficulty);
-    slotsLeft.set(bestUser, (slotsLeft.get(bestUser) ?? 0) - 1);
-    const order = orderCounters.get(bestUser) ?? 0;
-    orderCounters.set(bestUser, order + 1);
-    toCreate.push({ date, userId: bestUser, taskId: task.id, order });
-  }
+      capacityLeft.set(bestUser, (capacityLeft.get(bestUser) ?? 0) - task.difficulty);
+      slotsLeft.set(bestUser, (slotsLeft.get(bestUser) ?? 0) - 1);
+      const order = orderCounters.get(bestUser) ?? 0;
+      orderCounters.set(bestUser, order + 1);
+      toCreate.push({ date, userId: bestUser, taskId: task.id, order });
+    }
+  };
+
+  // Due-only chores get their actual due day, even if that day is already full.
+  place(eligible.filter((e) => e.task.dueOnly), true);
+  place(eligible.filter((e) => !e.task.dueOnly), false);
 
   if (toCreate.length > 0) {
     await prisma.dailyAssignment.createMany({ data: toCreate });
@@ -633,6 +647,7 @@ async function assignNextForUser(userId: string, date: string, pointsLeft: numbe
     }))
     .filter(({ dirt, task }) => dirt >= showAt(task.dueOnly) && task.difficulty <= pointsLeft)
     .sort((a, b) => {
+      if (a.task.dueOnly !== b.task.dueOnly) return a.task.dueOnly ? -1 : 1;
       if (a.task.important !== b.task.important) return a.task.important ? -1 : 1;
       if (a.exclusive !== b.exclusive) return a.exclusive ? -1 : 1;
       return b.dirt - a.dirt;

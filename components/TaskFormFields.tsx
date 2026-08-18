@@ -85,7 +85,7 @@ export default function TaskFormFields({
         <span>
           Only when due
           <span className="block text-xs font-normal mt-0.5" style={{ color: "var(--text3)" }}>
-            Don’t put this on the list until the full interval has passed
+            Shows on the due day — won’t get pulled forward to fill an earlier list
           </span>
         </span>
       </label>
