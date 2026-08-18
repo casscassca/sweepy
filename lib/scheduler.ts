@@ -363,6 +363,43 @@ function parseNotifyTags(raw: string | null | undefined) {
   return (raw ?? "").split(",").map((t) => t.trim()).filter(Boolean);
 }
 
+/** Ask HA to drop this assignment's banner on whoever still has the tag. */
+export async function dismissAssignmentNotify(assignmentId: string) {
+  try {
+    const assignment = await prisma.dailyAssignment.findUnique({
+      where: { id: assignmentId },
+      select: { id: true, taskId: true, userId: true },
+    });
+    if (!assignment) return;
+    const ha = haConfig();
+    if (!ha) return;
+
+    const people = await prisma.user.findMany({
+      where: { haNotifyTarget: { not: "" } },
+      select: { id: true, haNotifyTarget: true, notifyTags: true },
+    });
+    const drop = [assignment.id, assignment.taskId];
+    const targets = people.filter((user) => {
+      const tags = parseNotifyTags(user.notifyTags);
+      return user.id === assignment.userId || drop.some((tag) => tags.includes(tag));
+    });
+    if (targets.length === 0) return;
+
+    const catalog = await listHaNotifyCatalog(ha);
+    if (!catalog.reachable) return;
+
+    for (const user of targets) {
+      const resolved = resolveNotifyTarget(user.haNotifyTarget, catalog);
+      if (!resolved.ok) continue;
+      await clearPhoneNotifications(ha, resolved.service, drop);
+      const next = parseNotifyTags(user.notifyTags).filter((tag) => !drop.includes(tag));
+      await prisma.user.update({ where: { id: user.id }, data: { notifyTags: next.join(",") } });
+    }
+  } catch (err) {
+    console.error("[notify] dismiss failed", err);
+  }
+}
+
 async function clearPhoneNotifications(
   ha: NonNullable<ReturnType<typeof haConfig>>,
   service: string,

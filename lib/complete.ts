@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { prisma } from "./prisma";
-import { holdAssignmentOnDate } from "./scheduler";
+import { dismissAssignmentNotify, holdAssignmentOnDate } from "./scheduler";
 
 export async function completeAssignment(opts: {
   assignmentId: string;
@@ -40,6 +40,9 @@ export async function completeAssignment(opts: {
       completedAt: opts.completedAt,
     },
   });
+
+  await dismissAssignmentNotify(opts.assignmentId);
+  if (assignment.id !== opts.assignmentId) await dismissAssignmentNotify(assignment.id);
 
   return { ok: true as const, assignment };
 }
