@@ -2,10 +2,11 @@ import { prisma } from "./prisma";
 import { haConfig, listHaNotifyCatalog, postNotify, resolveNotifyTarget } from "./ha";
 import { appendIntegrationLog } from "./integration-log";
 import { dirtinessRatio, dueDayStr, isDirtyEnough, showAt } from "./dirtiness";
+import { calendarDayStr } from "./dates";
 import { addDays, format, getDay, parseISO } from "date-fns";
 
 function todayStr() {
-  return format(new Date(), "yyyy-MM-dd");
+  return calendarDayStr(new Date());
 }
 
 // allowedDays is a comma-separated string of day numbers (0=Sun … 6=Sat), or null = any day

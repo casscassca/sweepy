@@ -1,4 +1,5 @@
-import { addDays, differenceInCalendarDays, format, startOfDay, subDays } from "date-fns";
+import { subDays } from "date-fns";
+import { addCalendarDays, calendarDayStr, calendarDaysBetween } from "./dates";
 import { formatFrequency } from "./frequency";
 
 /** 0 = just cleaned, 1 = due, 3 = filthy / never done. */
@@ -7,17 +8,13 @@ export const DIRT_MAX = 3;
 /** Hide from Today / Upcoming until at least this dirty (3/10 of the way to due). */
 export const DIRT_SHOW_AT = 0.3;
 
-function parseDate(value: Date | string): Date {
-  return typeof value === "string" ? new Date(value) : value;
-}
-
 export function dirtinessRatio(
   lastDoneAt: Date | string | null,
   frequencyDays: number,
   asOf: Date = new Date(),
 ): number {
   if (!lastDoneAt || frequencyDays <= 0) return DIRT_MAX;
-  const daysSince = differenceInCalendarDays(asOf, parseDate(lastDoneAt));
+  const daysSince = calendarDaysBetween(asOf, lastDoneAt);
   return Math.min(DIRT_MAX, Math.max(0, daysSince / frequencyDays));
 }
 
@@ -28,7 +25,7 @@ export function showAt(dueOnly?: boolean) {
 /** Calendar day the interval is up (last done Monday + 3 days → Thursday). */
 export function dueDayStr(lastDoneAt: Date | string | null, frequencyDays: number): string | null {
   if (!lastDoneAt || frequencyDays <= 0) return null;
-  return format(addDays(startOfDay(parseDate(lastDoneAt)), frequencyDays), "yyyy-MM-dd");
+  return addCalendarDays(calendarDayStr(lastDoneAt), frequencyDays);
 }
 
 export function isDirtyEnough(
@@ -83,6 +80,6 @@ export function dirtWord(ratio: number): string {
 
 export function dirtDetail(lastDoneAt: Date | string | null, frequencyDays: number, asOf: Date = new Date()): string {
   if (!lastDoneAt) return "Never cleaned — treating as filthy";
-  const daysSince = differenceInCalendarDays(asOf, parseDate(lastDoneAt));
+  const daysSince = calendarDaysBetween(asOf, lastDoneAt);
   return `Last done ${daysSince} day${daysSince === 1 ? "" : "s"} ago · ${formatFrequency(frequencyDays).toLowerCase()}`;
 }
