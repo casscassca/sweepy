@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 import { haConfig, listHaNotifyCatalog, postNotify, resolveNotifyTarget } from "./ha";
 import { appendIntegrationLog } from "./integration-log";
-import { dirtinessRatio, isDirtyEnough, showAt } from "./dirtiness";
+import { dirtinessRatio, dueDayStr, isDirtyEnough, showAt } from "./dirtiness";
 import { addDays, format, getDay, parseISO } from "date-fns";
 
 function todayStr() {
@@ -13,6 +13,28 @@ function isAllowedOnDate(allowedDays: string | null, date: Date): boolean {
   if (!allowedDays) return true;
   const allowed = allowedDays.split(",").map(Number);
   return allowed.includes(getDay(date));
+}
+
+function nextAllowedOnOrAfter(allowedDays: string | null, from: string, until: string): string | null {
+  let day = parseISO(`${from}T12:00:00`);
+  const end = parseISO(`${until}T12:00:00`);
+  while (day <= end) {
+    if (isAllowedOnDate(allowedDays, day)) return format(day, "yyyy-MM-dd");
+    day = addDays(day, 1);
+  }
+  return null;
+}
+
+function dueOnlyTargetDate(
+  lastDoneAt: Date | string | null,
+  frequencyDays: number,
+  allowedDays: string | null,
+  fromDate: string,
+  until: string,
+) {
+  const due = dueDayStr(lastDoneAt, frequencyDays);
+  const start = !due || due < fromDate ? fromDate : due;
+  return nextAllowedOnOrAfter(allowedDays, start, until);
 }
 
 /** Keep the earliest open assignment per task; drop later copies. */
@@ -144,6 +166,9 @@ export async function reshuffleFrom(
       task: { oneOff: false },
     },
   });
+  // Plant due-only chores on their real due day first so leftover capacity
+  // on later days cannot steal them.
+  await placeDueOnlyOnDueDays(fromDate, horizon);
   let assigned = 0;
   for (const date of days) {
     assigned += (await runDailyAssignment(date, fromDate)).assigned;
@@ -155,8 +180,86 @@ export async function prepareAssignments(notBefore = todayStr()) {
   const duplicates = await dedupeOpenAssignments();
   const rolled = await rollForwardPastAssignments(notBefore);
   const dropped = await dropCleanUnheldAssignments();
+  await snapDueOnlyToDueDay(notBefore);
   await enforceCapacity(notBefore);
   return { duplicates, rolled, dropped };
+}
+
+/** Move unheld due-only chores onto the day the interval is actually up. */
+async function snapDueOnlyToDueDay(fromDate = todayStr(), horizon = 21) {
+  const until = format(addDays(parseISO(`${fromDate}T12:00:00`), horizon - 1), "yyyy-MM-dd");
+  const open = await prisma.dailyAssignment.findMany({
+    where: { completedAt: null, pinned: false, held: false, task: { dueOnly: true, oneOff: false } },
+    include: { task: { select: { lastDoneAt: true, frequencyDays: true, allowedDays: true } } },
+  });
+  for (const a of open) {
+    const target = dueOnlyTargetDate(a.task.lastDoneAt, a.task.frequencyDays, a.task.allowedDays, fromDate, until);
+    if (!target || target === a.date) continue;
+    const clash = await prisma.dailyAssignment.findUnique({
+      where: { date_taskId: { date: target, taskId: a.taskId } },
+    });
+    if (clash) await prisma.dailyAssignment.delete({ where: { id: a.id } });
+    else await prisma.dailyAssignment.update({ where: { id: a.id }, data: { date: target } });
+  }
+}
+
+/** After a reshuffle wipe, seat due-only chores on their due day before filler runs. */
+async function placeDueOnlyOnDueDays(fromDate: string, horizon: number) {
+  const until = format(addDays(parseISO(`${fromDate}T12:00:00`), horizon - 1), "yyyy-MM-dd");
+  const [tasks, users, open] = await Promise.all([
+    prisma.task.findMany({
+      where: { dueOnly: true, oneOff: false },
+      include: { assignableUsers: true },
+    }),
+    prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true } }),
+    prisma.dailyAssignment.findMany({
+      where: { completedAt: null },
+      select: { taskId: true, date: true, userId: true, order: true },
+    }),
+  ]);
+
+  const taken = new Set(open.map((a) => a.taskId));
+  const load = new Map<string, number>();
+  const lastOrder = new Map<string, number>();
+  for (const a of open) {
+    const userKey = `${a.date}:${a.userId}`;
+    load.set(userKey, (load.get(userKey) ?? 0) + 1);
+    lastOrder.set(userKey, Math.max(lastOrder.get(userKey) ?? -1, a.order));
+  }
+
+  const toCreate: Array<{ date: string; userId: string; taskId: string; order: number }> = [];
+  for (const task of tasks) {
+    if (taken.has(task.id)) continue;
+    const date = dueOnlyTargetDate(task.lastDoneAt, task.frequencyDays, task.allowedDays, fromDate, until);
+    if (!date) continue;
+
+    const allowed = task.assignableUsers.length > 0
+      ? task.assignableUsers.map((au) => au.userId)
+      : users.map((u) => u.id);
+    if (allowed.length === 0) continue;
+
+    let bestUser = allowed[0];
+    let bestLoad = Number.POSITIVE_INFINITY;
+    for (const uid of allowed) {
+      const n = load.get(`${date}:${uid}`) ?? 0;
+      if (n < bestLoad) {
+        bestLoad = n;
+        bestUser = uid;
+      }
+    }
+
+    const userKey = `${date}:${bestUser}`;
+    const order = (lastOrder.get(userKey) ?? -1) + 1;
+    lastOrder.set(userKey, order);
+    load.set(userKey, (load.get(userKey) ?? 0) + 1);
+    taken.add(task.id);
+    toCreate.push({ date, userId: bestUser, taskId: task.id, order });
+  }
+
+  if (toCreate.length > 0) {
+    await prisma.dailyAssignment.createMany({ data: toCreate });
+  }
+  return toCreate.length;
 }
 
 export async function holdAssignmentOnDate(id: string, date: string) {

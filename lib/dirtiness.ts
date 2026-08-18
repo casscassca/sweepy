@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, subDays } from "date-fns";
+import { addDays, differenceInCalendarDays, format, startOfDay, subDays } from "date-fns";
 import { formatFrequency } from "./frequency";
 
 /** 0 = just cleaned, 1 = due, 3 = filthy / never done. */
@@ -23,6 +23,12 @@ export function dirtinessRatio(
 
 export function showAt(dueOnly?: boolean) {
   return dueOnly ? 1 : DIRT_SHOW_AT;
+}
+
+/** Calendar day the interval is up (last done Monday + 3 days → Thursday). */
+export function dueDayStr(lastDoneAt: Date | string | null, frequencyDays: number): string | null {
+  if (!lastDoneAt || frequencyDays <= 0) return null;
+  return format(addDays(startOfDay(parseDate(lastDoneAt)), frequencyDays), "yyyy-MM-dd");
 }
 
 export function isDirtyEnough(
