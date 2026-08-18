@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Check, Search, Star } from "lucide-react";
-import TaskFormFields, { FREQ_OPTIONS, parseTaskForm } from "@/components/TaskFormFields";
+import TaskFormFields, { formatFrequency, parseTaskForm } from "@/components/TaskFormFields";
 import RoomDirtGauge from "@/components/RoomDirtGauge";
 import DirtGauge from "@/components/DirtGauge";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
@@ -28,7 +28,7 @@ const DIFF = [
 ];
 
 function freqLabel(days: number) {
-  return FREQ_OPTIONS.find((o) => o.days === days)?.label ?? `Every ${days} days`;
+  return formatFrequency(days);
 }
 
 function DiffBadge({ n }: { n: number }) {

@@ -1,21 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import DirtSlider from "@/components/DirtSlider";
 import { lastDoneAtFromRatio } from "@/lib/dirtiness";
+import { daysForFrequency, FREQ_UNITS, splitFrequency, type FreqUnit } from "@/lib/frequency";
 
-export const FREQ_OPTIONS = [
-  { label: "Daily", days: 1 },
-  { label: "Every 2 days", days: 2 },
-  { label: "Every 3 days", days: 3 },
-  { label: "Weekly", days: 7 },
-  { label: "Every 2 weeks", days: 14 },
-  { label: "Monthly", days: 30 },
-  { label: "Every 2 months", days: 60 },
-  { label: "Every 3 months", days: 90 },
-  { label: "Every 6 months", days: 180 },
-  { label: "Yearly", days: 365 },
-];
+export { formatFrequency } from "@/lib/frequency";
 
 export type TaskFormUser = { id: string; name: string; color: string };
 export type TaskFormTask = {
@@ -35,7 +25,9 @@ const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 export function parseTaskForm(form: HTMLFormElement) {
   const name = (form.elements.namedItem("name") as HTMLInputElement).value;
   const difficulty = Number((form.elements.namedItem("difficulty") as HTMLSelectElement).value);
-  const frequencyDays = Number((form.elements.namedItem("frequencyDays") as HTMLSelectElement).value);
+  const freqCount = Number((form.elements.namedItem("freqCount") as HTMLInputElement).value);
+  const freqUnit = ((form.elements.namedItem("freqUnit") as HTMLSelectElement).value || "week") as FreqUnit;
+  const frequencyDays = daysForFrequency(freqCount, freqUnit);
   const selected = Array.from(form.querySelectorAll<HTMLInputElement>("input[name=assignable]:checked")).map((el) => el.value);
   const checkedDays = Array.from(form.querySelectorAll<HTMLInputElement>("input[name=day]:checked")).map((el) => el.value);
   const allowedDays = checkedDays.length === 7 || checkedDays.length === 0 ? null : checkedDays.join(",");
@@ -63,6 +55,10 @@ export default function TaskFormFields({
   users: TaskFormUser[];
 }) {
   const activeDays = task?.allowedDays ? task.allowedDays.split(",").map(Number) : null;
+  const initialFreq = splitFrequency(task?.frequencyDays ?? 7);
+  const [freqCount, setFreqCount] = useState(initialFreq.count);
+  const [freqUnit, setFreqUnit] = useState<FreqUnit>(initialFreq.unit);
+  const frequencyDays = useMemo(() => daysForFrequency(freqCount, freqUnit), [freqCount, freqUnit]);
   const [notesOpen, setNotesOpen] = useState(false);
   const hasNotes = Boolean(task?.notes?.trim());
 
@@ -91,15 +87,33 @@ export default function TaskFormFields({
           </select>
         </div>
         <div className="flex-1">
-          <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Frequency</label>
-          <select name="frequencyDays" defaultValue={task?.frequencyDays ?? 7} className="w-full">
-            {FREQ_OPTIONS.map((o) => (
-              <option key={o.days} value={o.days}>{o.label}</option>
-            ))}
-          </select>
+          <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Every</label>
+          <div className="flex gap-2">
+            <div className="w-16 shrink-0">
+              <input
+                name="freqCount"
+                type="number"
+                min={1}
+                max={99}
+                required
+                value={freqCount}
+                onChange={(e) => setFreqCount(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
+              />
+            </div>
+            <select
+              name="freqUnit"
+              value={freqUnit}
+              onChange={(e) => setFreqUnit(e.target.value as FreqUnit)}
+              className="flex-1 min-w-0"
+            >
+              {FREQ_UNITS.map((u) => (
+                <option key={u.value} value={u.value}>{freqCount === 1 ? u.singular : u.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
-      <DirtSlider lastDoneAt={task?.lastDoneAt} frequencyDays={task?.frequencyDays} />
+      <DirtSlider key={frequencyDays} lastDoneAt={task?.lastDoneAt} frequencyDays={frequencyDays} />
       <div>
         <label className="block text-xs mb-2" style={{ color: "var(--text3)" }}>
           Allowed days <span style={{ color: "var(--text3)" }}>(blank = any day)</span>

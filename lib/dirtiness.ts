@@ -1,4 +1,5 @@
 import { differenceInDays, subDays } from "date-fns";
+import { formatFrequency } from "./frequency";
 
 /** 0 = just cleaned, 1 = due, 3 = filthy / never done. */
 export const DIRT_MAX = 3;
@@ -72,6 +73,5 @@ export function dirtWord(ratio: number): string {
 export function dirtDetail(lastDoneAt: Date | string | null, frequencyDays: number, asOf: Date = new Date()): string {
   if (!lastDoneAt) return "Never cleaned — treating as filthy";
   const daysSince = differenceInDays(asOf, parseDate(lastDoneAt));
-  const cadence = frequencyDays === 1 ? "daily" : `every ${frequencyDays} days`;
-  return `Last done ${daysSince} day${daysSince === 1 ? "" : "s"} ago · ${cadence}`;
+  return `Last done ${daysSince} day${daysSince === 1 ? "" : "s"} ago · ${formatFrequency(frequencyDays).toLowerCase()}`;
 }
