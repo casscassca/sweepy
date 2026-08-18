@@ -8,6 +8,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, CheckCircle2, Circle, Pencil, Pin, Plus, Star, UserCheck, X, RefreshCw } from "lucide-react";
+import { assignmentDifficulty, assignmentLabel } from "@/lib/addon";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 import DirtGauge from "@/components/DirtGauge";
 import TaskEditModal from "@/components/TaskEditModal";
@@ -78,7 +79,7 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
           {assignment.task.important && (
             <Star size={12} fill="currentColor" className="shrink-0" style={{ color: "var(--accent)", textDecoration: "none" }} />
           )}
-          {assignment.task.name}
+          {assignmentLabel(assignment.task, assignment.completedAt)}
         </span>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           {onReassign ? (
@@ -102,8 +103,8 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
           <span className="text-xs" style={{ color: "var(--text3)" }}>
             {assignment.task.oneOff ? "one-off" : assignment.task.room?.name}
           </span>
-          <span className="text-xs font-medium px-1.5 py-px rounded-full" style={{ background: DIFF_COLOR[assignment.task.difficulty] + "22", color: DIFF_COLOR[assignment.task.difficulty] }}>
-            {DIFF_LABEL[assignment.task.difficulty]}
+          <span className="text-xs font-medium px-1.5 py-px rounded-full" style={{ background: DIFF_COLOR[assignmentDifficulty(assignment.task, assignment.completedAt)] + "22", color: DIFF_COLOR[assignmentDifficulty(assignment.task, assignment.completedAt)] }}>
+            {DIFF_LABEL[assignmentDifficulty(assignment.task, assignment.completedAt)]}
           </span>
           {!done && !assignment.task.oneOff && (
             <DirtGauge
@@ -394,7 +395,7 @@ export default function UpcomingPage() {
                       {dayLabel(date)}
                     </h2>
                     <span className="text-xs" style={{ color: "var(--text3)" }}>
-                      {dayAssignments.length} tasks · {dayAssignments.reduce((s, a) => s + a.task.difficulty, 0)} pts
+                      {dayAssignments.length} tasks · {dayAssignments.reduce((s, a) => s + assignmentDifficulty(a.task, a.completedAt), 0)} pts
                     </span>
                     {dayAssignments.length > 0 && (
                       <div className="flex-1 h-0.5 rounded-full overflow-hidden" style={{ background: "var(--surface2)" }}>

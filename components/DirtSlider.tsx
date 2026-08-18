@@ -6,9 +6,15 @@ import DirtGauge from "./DirtGauge";
 export default function DirtSlider({
   lastDoneAt,
   frequencyDays,
+  name = "dirtRatio",
+  inputId = "dirt-ratio",
+  label = "How dirty is it?",
 }: {
   lastDoneAt?: string | null;
   frequencyDays?: number;
+  name?: string;
+  inputId?: string;
+  label?: string;
 }) {
   const [ratio, setRatio] = useState(() => dirtinessRatio(lastDoneAt ?? null, frequencyDays ?? 7));
   const color = dirtColor(ratio);
@@ -16,14 +22,14 @@ export default function DirtSlider({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <label className="text-xs" style={{ color: "var(--text3)" }} htmlFor="dirt-ratio">
-          How dirty is it?
+        <label className="text-xs" style={{ color: "var(--text3)" }} htmlFor={inputId}>
+          {label}
         </label>
         <DirtGauge ratio={ratio} size={22} />
       </div>
       <input
-        id="dirt-ratio"
-        name="dirtRatio"
+        id={inputId}
+        name={name}
         type="range"
         min={0}
         max={DIRT_MAX}

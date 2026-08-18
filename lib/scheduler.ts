@@ -1,7 +1,8 @@
 import { prisma } from "./prisma";
 import { haConfig, listHaNotifyCatalog, postNotify, resolveNotifyTarget } from "./ha";
 import { appendIntegrationLog } from "./integration-log";
-import { dirtinessRatio, dueDayStr, isDirtyEnough, showAt } from "./dirtiness";
+import { displayTaskDifficulty, displayTaskName, isTaskEligible } from "./addon";
+import { dirtinessRatio, dueDayStr } from "./dirtiness";
 import { calendarDayStr } from "./dates";
 import { addDays, format, getDay, parseISO } from "date-fns";
 
@@ -61,10 +62,10 @@ export async function dedupeOpenAssignments() {
 export async function dropCleanUnheldAssignments() {
   const open = await prisma.dailyAssignment.findMany({
     where: { completedAt: null, held: false },
-    include: { task: { select: { lastDoneAt: true, frequencyDays: true, oneOff: true, dueOnly: true } } },
+    include: { task: { select: { lastDoneAt: true, frequencyDays: true, oneOff: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true } } },
   });
   const drop = open
-    .filter((a) => !a.task.oneOff && !isDirtyEnough(a.task.lastDoneAt, a.task.frequencyDays, new Date(`${a.date}T12:00:00`), a.task.dueOnly))
+    .filter((a) => !a.task.oneOff && !isTaskEligible(a.task, new Date(`${a.date}T12:00:00`)))
     .map((a) => a.id);
   if (drop.length > 0) {
     await prisma.dailyAssignment.deleteMany({ where: { id: { in: drop } } });
@@ -113,7 +114,7 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
     const next = format(addDays(start, i + 1), "yyyy-MM-dd");
     const open = await prisma.dailyAssignment.findMany({
       where: { date, completedAt: null },
-      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, oneOff: true, important: true, dueOnly: true } } },
+      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, oneOff: true, important: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true } } },
     });
 
     const byUser = new Map<string, typeof open>();
@@ -132,7 +133,8 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
         return dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays) -
           dirtinessRatio(b.task.lastDoneAt, b.task.frequencyDays);
       });
-      let points = autos.reduce((s, a) => s + a.task.difficulty, 0);
+      const asOf = new Date(`${date}T12:00:00`);
+      let points = autos.reduce((s, a) => s + displayTaskDifficulty(a.task, asOf), 0);
       let count = autos.length;
       let idx = 0;
       while ((points > limit || count > maxTasks) && idx < ranked.length) {
@@ -142,7 +144,7 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
         });
         if (clash) await prisma.dailyAssignment.delete({ where: { id: spill.id } });
         else await prisma.dailyAssignment.update({ where: { id: spill.id }, data: { date: next } });
-        points -= spill.task.difficulty;
+        points -= displayTaskDifficulty(spill.task, asOf);
         count -= 1;
       }
     }
@@ -374,7 +376,7 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.dailyAssignment.findMany({
       where: { date },
-      include: { task: { select: { difficulty: true } } },
+      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true } } },
     }),
     prisma.dailyAssignment.findMany({
       where: { completedAt: null, date: { not: date } },
@@ -394,7 +396,7 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
       exclusive: t.assignableUsers.length === 1,
       important: t.important,
     }))
-    .filter(({ dirt, task }) => dirt >= showAt(task.dueOnly))
+    .filter(({ task }) => isTaskEligible(task, targetDate))
     .sort((a, b) => {
       if (a.important !== b.important) return a.important ? -1 : 1;
       if (a.exclusive !== b.exclusive) return a.exclusive ? -1 : 1;
@@ -407,7 +409,7 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
   const slotsLeft = new Map<string, number>(users.map((u) => [u.id, u.dailyTaskLimit]));
   const orderCounters = new Map<string, number>(users.map((u) => [u.id, 0]));
   for (const a of existing) {
-    capacityLeft.set(a.userId, (capacityLeft.get(a.userId) ?? 0) - a.task.difficulty);
+    capacityLeft.set(a.userId, (capacityLeft.get(a.userId) ?? 0) - displayTaskDifficulty(a.task, targetDate));
     slotsLeft.set(a.userId, (slotsLeft.get(a.userId) ?? 0) - 1);
     orderCounters.set(a.userId, (orderCounters.get(a.userId) ?? 0) + 1);
   }
@@ -425,7 +427,7 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
     for (const uid of assignableUserIds) {
       const cap = capacityLeft.get(uid) ?? 0;
       const slots = slotsLeft.get(uid) ?? 0;
-      if (!allowOver && (slots < 1 || cap < task.difficulty)) continue;
+      if (!allowOver && (slots < 1 || cap < displayTaskDifficulty(task, targetDate))) continue;
       if (cap > bestCapacity) {
         bestCapacity = cap;
         bestUser = uid;
@@ -439,7 +441,7 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
       const bestUser = pickUser(task, allowOver);
       if (!bestUser) continue;
 
-      capacityLeft.set(bestUser, (capacityLeft.get(bestUser) ?? 0) - task.difficulty);
+      capacityLeft.set(bestUser, (capacityLeft.get(bestUser) ?? 0) - displayTaskDifficulty(task, targetDate));
       slotsLeft.set(bestUser, (slotsLeft.get(bestUser) ?? 0) - 1);
       const order = orderCounters.get(bestUser) ?? 0;
       orderCounters.set(bestUser, order + 1);
@@ -627,8 +629,8 @@ export async function sendNotificationsForUser(
   const sentIds: string[] = [];
 
   for (const assignment of assignments) {
-    const difficulty = ["", "quick", "medium", "big job"][assignment.task.difficulty];
-    const taskName = assignment.task.name;
+    const difficulty = ["", "quick", "medium", "big job"][displayTaskDifficulty(assignment.task)];
+    const taskName = displayTaskName(assignment.task);
     const tag = assignment.id;
     const base = {
       title: assignment.task.room ? `${assignment.task.room.name}: ${taskName}` : taskName,
@@ -707,9 +709,10 @@ export async function fillUserTodayAndNotify(userId: string) {
 
   const open = await prisma.dailyAssignment.findMany({
     where: { userId, date, completedAt: null },
-    include: { task: { select: { difficulty: true } } },
+    include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true } } },
   });
-  const points = open.reduce((s, a) => s + a.task.difficulty, 0);
+  const asOf = new Date(`${date}T12:00:00`);
+  const points = open.reduce((s, a) => s + displayTaskDifficulty(a.task, asOf), 0);
   if (open.length >= user.dailyTaskLimit || points >= user.dailyCapacity) return 0;
 
   const addedId = await assignNextForUser(user.id, date, user.dailyCapacity - points);
@@ -749,7 +752,7 @@ async function assignNextForUser(userId: string, date: string, pointsLeft: numbe
       dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, targetDate),
       exclusive: t.assignableUsers.length === 1,
     }))
-    .filter(({ dirt, task }) => dirt >= showAt(task.dueOnly) && task.difficulty <= pointsLeft)
+    .filter(({ task }) => isTaskEligible(task, targetDate) && displayTaskDifficulty(task, targetDate) <= pointsLeft)
     .sort((a, b) => {
       if (a.task.dueOnly !== b.task.dueOnly) return a.task.dueOnly ? -1 : 1;
       if (a.task.important !== b.task.important) return a.task.important ? -1 : 1;

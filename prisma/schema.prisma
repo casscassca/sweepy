@@ -29,6 +29,10 @@ model Task {
   important     Boolean  @default(false)
   dueOnly       Boolean  @default(false)
   notes         String   @default("")
+  addonName           String    @default("")
+  addonFrequencyDays  Int       @default(0)
+  addonPoints         Int       @default(1)
+  addonLastDoneAt     DateTime?
   createdAt     DateTime @default(now())
   assignableUsers TaskAssignableUser[]
   assignments     DailyAssignment[]

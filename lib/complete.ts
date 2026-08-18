@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { isAddonDue } from "./addon";
 import { prisma } from "./prisma";
 import { addTaskToDate, dismissAssignmentNotify, holdAssignmentOnDate } from "./scheduler";
 
@@ -27,9 +28,14 @@ export async function completeAssignment(opts: {
     data: { completedAt: opts.completedAt, completedById, remindAt: null },
   });
 
+  const task = await prisma.task.findUnique({ where: { id: assignment.taskId } });
+  const mopped = task ? isAddonDue(task, opts.completedAt) : false;
   await prisma.task.update({
     where: { id: assignment.taskId },
-    data: { lastDoneAt: opts.completedAt },
+    data: {
+      lastDoneAt: opts.completedAt,
+      ...(mopped && { addonLastDoneAt: opts.completedAt }),
+    },
   });
 
   await prisma.completionLog.create({
@@ -92,9 +98,15 @@ export async function uncompleteFromLog(logId: string) {
       where: { taskId: log.taskId },
       orderBy: [{ completedAt: "desc" }, { id: "desc" }],
     });
+    const task = await prisma.task.findUnique({ where: { id: log.taskId } });
+    const mopped = task?.addonLastDoneAt
+      && Math.abs(task.addonLastDoneAt.getTime() - log.completedAt.getTime()) < 5000;
     await prisma.task.update({
       where: { id: log.taskId },
-      data: { lastDoneAt: previous?.completedAt ?? null },
+      data: {
+        lastDoneAt: previous?.completedAt ?? null,
+        ...(mopped && { addonLastDoneAt: null }),
+      },
     });
   }
 

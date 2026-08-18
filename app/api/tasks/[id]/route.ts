@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
+import { addonFields } from "@/lib/addon";
 import { prisma } from "@/lib/prisma";
 import { dropCleanUnheldAssignments } from "@/lib/scheduler";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { name, roomId, difficulty, frequencyDays, allowedDays, assignableUserIds, lastDoneAt, important, dueOnly, notes } = await req.json();
+  const { name, roomId, difficulty, frequencyDays, allowedDays, assignableUserIds, lastDoneAt, important, dueOnly, notes, addonName, addonFrequencyDays, addonPoints, addonLastDoneAt } = await req.json();
+  const addon = addonName !== undefined
+    ? addonFields({ addonName, addonFrequencyDays, addonPoints, addonLastDoneAt })
+    : null;
 
   // Replace assignable users if provided
   if (assignableUserIds !== undefined) {
@@ -28,6 +32,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(important !== undefined && { important: Boolean(important) }),
       ...(dueOnly !== undefined && { dueOnly: Boolean(dueOnly) }),
       ...(notes !== undefined && { notes: typeof notes === "string" ? notes.trim().slice(0, 2000) : "" }),
+      ...(addon && addon),
     },
     include: { assignableUsers: { include: { user: true } } },
   });

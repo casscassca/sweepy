@@ -6,6 +6,7 @@ import TaskFormFields, { formatFrequency, parseTaskForm } from "@/components/Tas
 import CompleteAsMenu from "@/components/CompleteAsMenu";
 import RoomDirtGauge from "@/components/RoomDirtGauge";
 import DirtGauge from "@/components/DirtGauge";
+import { addonDetail, displayTaskDifficulty, displayTaskName, hasAddon } from "@/lib/addon";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 
 type User = { id: string; name: string; color: string };
@@ -19,6 +20,10 @@ type Task = {
   important?: boolean;
   dueOnly?: boolean;
   notes?: string;
+  addonName?: string;
+  addonFrequencyDays?: number;
+  addonPoints?: number;
+  addonLastDoneAt?: string | null;
   assignableUsers: { user: User }[];
 };
 type Room = { id: string; name: string; icon: string; tasks: Task[] };
@@ -105,11 +110,14 @@ function CatalogTaskRow({
           {task.important && (
             <Star size={12} fill="currentColor" className="shrink-0" style={{ color: "var(--accent)", textDecoration: "none" }} />
           )}
-          {task.name}
+          {displayTaskName(task)}
         </div>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
-          <DiffBadge n={task.difficulty} />
+          <DiffBadge n={displayTaskDifficulty(task)} />
           <span className="text-xs" style={{ color: "var(--text3)" }}>{freqLabel(task.frequencyDays)}</span>
+          {hasAddon(task) && (
+            <span className="text-xs" style={{ color: "var(--text3)" }}>{addonDetail(task)}</span>
+          )}
           {task.notes?.trim() && (
             <span className="text-xs" style={{ color: "var(--text3)" }}>note</span>
           )}
