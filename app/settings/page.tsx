@@ -9,6 +9,7 @@ type LoadWeek = { needPts: number; capPts: number; needTasks: number; capTasks: 
 type LoadStatus = {
   taskCount: number;
   week: LoadWeek;
+  catchUp?: { pts: number; tasks: number };
 };
 
 type HaPerson = { name: string; target: string; resolved: string | null; ok: boolean; hint: string | null };
@@ -254,12 +255,23 @@ function fmt(n: number) {
 function WorkloadCard({ load }: { load: LoadStatus }) {
   const gap = load.week.needPts - load.week.capPts;
   const behind = gap > 0.05;
+  const catchUpPts = load.catchUp?.pts ?? 0;
+  const catchUpTasks = load.catchUp?.tasks ?? 0;
+  const dirty = catchUpPts > 0.05;
   const scale = Math.max(load.week.needPts, load.week.capPts, 1);
-  const headline = behind
-    ? `${fmt(gap)} pts behind each week`
-    : gap < -0.05
-      ? `${fmt(-gap)} pts of slack each week`
-      : "Combined cap matches the catalog";
+  const slack = load.week.capPts - load.week.needPts;
+  const headline = dirty
+    ? `${fmt(catchUpPts)} pts to get the house current`
+    : behind
+      ? `${fmt(gap)} pts behind each week`
+      : gap < -0.05
+        ? `${fmt(-gap)} pts of slack each week`
+        : "Combined cap matches the catalog";
+  const pace = !dirty
+    ? null
+    : slack > 0.05
+      ? `About ${fmt((catchUpPts / slack) * 7)} days of leftover cap`
+      : "Cap is used staying current, so overdue work sits";
 
   return (
     <div className="mt-5 pt-5" style={{ borderTop: "1px solid var(--border)" }}>
@@ -269,7 +281,7 @@ function WorkloadCard({ load }: { load: LoadStatus }) {
           Edit caps
         </Link>
       </div>
-      <p className="text-sm font-medium" style={{ color: behind ? "var(--red)" : "var(--green)" }}>
+      <p className="text-sm font-medium" style={{ color: dirty || behind ? "var(--red)" : "var(--green)" }}>
         {headline}
       </p>
       <p className="text-xs mt-0.5 mb-4" style={{ color: "var(--text3)" }}>
@@ -306,6 +318,23 @@ function WorkloadCard({ load }: { load: LoadStatus }) {
           <p className="text-lg font-semibold tracking-tight">{fmt(load.week.capPts)} <span className="text-xs font-medium" style={{ color: "var(--text3)" }}>pts/week</span></p>
           <p className="text-xs" style={{ color: "var(--text3)" }}>{fmt(load.week.capPts / 7)} / day</p>
         </div>
+      </div>
+
+      <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+        <p className="text-xs" style={{ color: "var(--text3)" }}>To catch up</p>
+        {dirty ? (
+          <>
+            <p className="text-lg font-semibold tracking-tight">{fmt(catchUpPts)} <span className="text-xs font-medium" style={{ color: "var(--text3)" }}>pts overdue</span></p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>
+              {catchUpTasks} chore{catchUpTasks === 1 ? "" : "s"} past due{pace ? ` · ${pace}` : ""}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-lg font-semibold tracking-tight" style={{ color: "var(--green)" }}>House is current</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>Nothing in the catalog is past due</p>
+          </>
+        )}
       </div>
 
       <p className="text-xs mt-4" style={{ color: "var(--text3)" }}>

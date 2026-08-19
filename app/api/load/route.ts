@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
+import { calendarDayStr } from "@/lib/dates";
 import { householdLoad } from "@/lib/load";
 import { prisma } from "@/lib/prisma";
+import { dirtAsOfDate, type HouseVacation } from "@/lib/vacation";
 
 export async function GET() {
-  const [tasks, people] = await Promise.all([
+  const [tasks, people, settings] = await Promise.all([
     prisma.task.findMany({
       where: { oneOff: false },
       select: {
         difficulty: true,
         frequencyDays: true,
+        lastDoneAt: true,
         addonName: true,
         addonFrequencyDays: true,
         addonPoints: true,
+        addonLastDoneAt: true,
       },
     }),
     prisma.user.findMany({
@@ -25,7 +29,25 @@ export async function GET() {
         weekendTaskLimit: true,
       },
     }),
+    prisma.settings.findUnique({
+      where: { id: "singleton" },
+      select: {
+        houseVacation: true,
+        houseVacationStart: true,
+        houseVacationEnd: true,
+        pauseDirtiness: true,
+        dirtFrozenOn: true,
+      },
+    }),
   ]);
 
-  return NextResponse.json(householdLoad(tasks, people));
+  const house: HouseVacation = settings ?? {
+    houseVacation: false,
+    houseVacationStart: "",
+    houseVacationEnd: "",
+    pauseDirtiness: false,
+    dirtFrozenOn: "",
+  };
+
+  return NextResponse.json(householdLoad(tasks, people, dirtAsOfDate(house, calendarDayStr())));
 }

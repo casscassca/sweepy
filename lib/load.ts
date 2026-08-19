@@ -1,12 +1,16 @@
+import { displayTaskDifficulty, isAddonDue } from "./addon";
 import { weekCapacity, type PersonCaps } from "./capacity";
+import { dirtinessRatio } from "./dirtiness";
 
 export type LoadTask = {
   difficulty: number;
   frequencyDays: number;
+  lastDoneAt?: Date | string | null;
   oneOff?: boolean;
   addonName?: string | null;
   addonFrequencyDays?: number | null;
   addonPoints?: number | null;
+  addonLastDoneAt?: Date | string | null;
 };
 
 function addonOn(task: LoadTask) {
@@ -27,11 +31,16 @@ export function taskCountLoadPerDay(task: LoadTask) {
   return 1 / task.frequencyDays;
 }
 
-export function householdLoad(tasks: LoadTask[], people: LoadPerson[]) {
+function isBehindHealthy(task: LoadTask, asOf: Date) {
+  return dirtinessRatio(task.lastDoneAt ?? null, task.frequencyDays, asOf) >= 1 || isAddonDue(task, asOf);
+}
+
+export function householdLoad(tasks: LoadTask[], people: LoadPerson[], asOf: Date = new Date()) {
   const catalog = tasks.filter((t) => !t.oneOff);
   const needPtsDay = catalog.reduce((s, t) => s + taskPointLoadPerDay(t), 0);
   const needTasksDay = catalog.reduce((s, t) => s + taskCountLoadPerDay(t), 0);
   const weekCap = weekCapacity(people);
+  const overdue = catalog.filter((t) => isBehindHealthy(t, asOf));
 
   return {
     taskCount: catalog.length,
@@ -46,6 +55,10 @@ export function householdLoad(tasks: LoadTask[], people: LoadPerson[]) {
       capPts: weekCap.pts / 7,
       needTasks: needTasksDay,
       capTasks: weekCap.tasks / 7,
+    },
+    catchUp: {
+      pts: overdue.reduce((s, t) => s + displayTaskDifficulty(t, asOf), 0),
+      tasks: overdue.length,
     },
   };
 }
