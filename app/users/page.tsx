@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Pencil, Trash2, Plus, KeyRound, RefreshCw, Check, Copy, Bell, ScrollText } from "lucide-react";
+import { Pencil, Trash2, Plus, KeyRound, RefreshCw, Check, Copy, Bell, ScrollText, TreePalm } from "lucide-react";
 import { encodeWeek, parseWeek } from "@/lib/capacity";
 import { calendarDayStr } from "@/lib/dates";
 import { readJson } from "@/lib/read-json";
@@ -444,46 +444,6 @@ export default function UsersPage() {
       )}
 
       <div className="space-y-3">
-        <div className="p-5 rounded-2xl space-y-3" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <input
-              type="checkbox"
-              checked={house.houseVacation}
-              onChange={(e) => saveHouse({
-                ...house,
-                houseVacation: e.target.checked,
-                pauseDirtiness: e.target.checked ? house.pauseDirtiness : false,
-              })}
-            />
-            House vacation
-          </label>
-          {house.houseVacation && (
-            <div className="space-y-3">
-              <VacationDates
-                start={house.houseVacationStart}
-                end={house.houseVacationEnd}
-                onStart={(v) => saveHouse({ ...house, houseVacationStart: v })}
-                onEnd={(v) => saveHouse({ ...house, houseVacationEnd: v })}
-              />
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={house.pauseDirtiness}
-                  onChange={(e) => saveHouse({ ...house, pauseDirtiness: e.target.checked })}
-                />
-                Pause dirtiness
-              </label>
-              <p className="text-xs" style={{ color: "var(--text3)" }}>
-                {houseAway
-                  ? house.pauseDirtiness
-                    ? "Everyone is away. Chores stay as dirty as they are now."
-                    : "Everyone is away. Chores keep getting dirtier."
-                  : "Optional dates. Leave them blank to stay off until you uncheck."}
-              </p>
-            </div>
-          )}
-        </div>
-
         {showForm && !editing && (
           <div className="p-5 rounded-2xl space-y-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
             <h2 className="font-medium">New person</h2>
@@ -611,11 +571,67 @@ export default function UsersPage() {
         )}
       </div>
 
-      <Link
-        href="/history"
-        className="mt-6 flex items-center gap-3 px-4 py-3.5 rounded-2xl"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}
-      >
+      <div className="mt-6 space-y-3">
+        <div className="px-4 py-3.5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
+          <div className="flex items-center gap-3">
+            <span
+              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+              style={{
+                background: house.houseVacation ? "var(--green-dim)" : "var(--accent-dim)",
+                color: house.houseVacation ? "var(--green)" : "var(--accent)",
+              }}
+            >
+              <TreePalm size={16} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm">House vacation</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>
+                {!house.houseVacation
+                  ? "No auto-assign or morning notifies while everyone is away"
+                  : houseAway
+                    ? house.pauseDirtiness
+                      ? "Everyone is away. Chores stay as dirty as they are now."
+                      : "Everyone is away. Chores keep getting dirtier."
+                    : "Optional dates. Leave them blank to stay off until you uncheck."}
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              className="shrink-0"
+              checked={house.houseVacation}
+              onChange={(e) => saveHouse({
+                ...house,
+                houseVacation: e.target.checked,
+                pauseDirtiness: e.target.checked ? house.pauseDirtiness : false,
+              })}
+              aria-label="House vacation"
+            />
+          </div>
+          {house.houseVacation && (
+            <div className="mt-4 pt-4 space-y-3" style={{ borderTop: "1px solid var(--border)" }}>
+              <VacationDates
+                start={house.houseVacationStart}
+                end={house.houseVacationEnd}
+                onStart={(v) => saveHouse({ ...house, houseVacationStart: v })}
+                onEnd={(v) => saveHouse({ ...house, houseVacationEnd: v })}
+              />
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={house.pauseDirtiness}
+                  onChange={(e) => saveHouse({ ...house, pauseDirtiness: e.target.checked })}
+                />
+                Pause dirtiness
+              </label>
+            </div>
+          )}
+        </div>
+
+        <Link
+          href="/history"
+          className="flex items-center gap-3 px-4 py-3.5 rounded-2xl"
+          style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}
+        >
         <span
           className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
           style={{ background: "var(--accent-dim)", color: "var(--accent)" }}
@@ -627,6 +643,7 @@ export default function UsersPage() {
           <p className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>A timeline of everything that’s been checked off</p>
         </div>
       </Link>
+      </div>
     </div>
   );
 }
