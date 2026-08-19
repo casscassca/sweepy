@@ -2,10 +2,10 @@ import { dirtinessRatio, isDirtyEnough } from "./dirtiness";
 import { formatFrequency } from "./frequency";
 
 export type AddonFields = {
-  name: string;
-  difficulty: number;
-  lastDoneAt: Date | string | null;
-  frequencyDays: number;
+  name?: string;
+  difficulty?: number;
+  lastDoneAt?: Date | string | null;
+  frequencyDays?: number;
   dueOnly?: boolean;
   addonName?: string | null;
   addonFrequencyDays?: number | null;
@@ -23,8 +23,9 @@ export function isAddonDue(task: AddonFields, asOf: Date = new Date()) {
 }
 
 export function displayTaskName(task: AddonFields, asOf: Date = new Date()) {
-  if (!isAddonDue(task, asOf)) return task.name;
-  return `${task.name} and ${task.addonName!.trim()}`;
+  const name = task.name ?? "";
+  if (!isAddonDue(task, asOf)) return name;
+  return `${name} and ${task.addonName!.trim()}`;
 }
 
 function completedWithAddon(task: AddonFields, completedAt?: Date | string | null) {
@@ -33,24 +34,25 @@ function completedWithAddon(task: AddonFields, completedAt?: Date | string | nul
 }
 
 export function assignmentLabel(task: AddonFields, completedAt?: Date | string | null) {
-  if (completedWithAddon(task, completedAt)) return `${task.name} and ${task.addonName!.trim()}`;
+  if (completedWithAddon(task, completedAt)) return `${task.name ?? ""} and ${task.addonName!.trim()}`;
   return displayTaskName(task);
 }
 
 export function assignmentDifficulty(task: AddonFields, completedAt?: Date | string | null) {
   if (completedWithAddon(task, completedAt)) {
-    return Math.min(3, task.difficulty + Math.max(1, task.addonPoints ?? 1));
+    return Math.min(3, (task.difficulty ?? 1) + Math.max(1, task.addonPoints ?? 1));
   }
   return displayTaskDifficulty(task);
 }
 
 export function displayTaskDifficulty(task: AddonFields, asOf: Date = new Date()) {
-  if (!isAddonDue(task, asOf)) return task.difficulty;
-  return Math.min(3, task.difficulty + Math.max(1, task.addonPoints ?? 1));
+  const difficulty = task.difficulty ?? 1;
+  if (!isAddonDue(task, asOf)) return difficulty;
+  return Math.min(3, difficulty + Math.max(1, task.addonPoints ?? 1));
 }
 
 export function isTaskEligible(task: AddonFields, asOf: Date = new Date()) {
-  return isDirtyEnough(task.lastDoneAt, task.frequencyDays, asOf, task.dueOnly) || isAddonDue(task, asOf);
+  return isDirtyEnough(task.lastDoneAt ?? null, task.frequencyDays ?? 0, asOf, task.dueOnly) || isAddonDue(task, asOf);
 }
 
 export function addonDetail(task: AddonFields) {
