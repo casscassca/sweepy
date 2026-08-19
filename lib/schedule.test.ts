@@ -1,0 +1,65 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { isAllowedOnDate, nextAllowedOnOrAfter } from "./allowed-days";
+import { overflowNextDate } from "./capacity";
+import { cleanlinessPct, dirtinessRatio, dueDayStr, dueOnAllowedDay, isDirtyEnough } from "./dirtiness";
+import { daysForFrequency } from "./frequency";
+import { personAway, returnDay } from "./vacation";
+
+const WED = "3";
+const lastWed = new Date("2026-08-12T12:00:00-05:00");
+
+describe("weekly Wednesday-only", () => {
+  it("lands every Wednesday and never Thursday", () => {
+    const due = dueOnAllowedDay(lastWed, daysForFrequency(1, "week"), WED, "2026-08-13", "2026-09-09");
+    assert.equal(due, "2026-08-19");
+    assert.equal(isAllowedOnDate(WED, due!), true);
+    assert.equal(isAllowedOnDate(WED, "2026-08-20"), false);
+  });
+
+  it("skips a missed Wednesday to the next Wednesday", () => {
+    const due = dueOnAllowedDay(lastWed, 7, WED, "2026-08-20", "2026-09-09");
+    assert.equal(due, "2026-08-26");
+  });
+
+  it("overflows off Wednesday onto the next Wednesday", () => {
+    const dest = nextAllowedOnOrAfter(WED, overflowNextDate("2026-08-19", false));
+    assert.equal(dest, "2026-08-26");
+  });
+
+  it("unparks from vacation onto the next allowed day", () => {
+    const person = { vacationOn: true, vacationStart: "2026-08-19", vacationEnd: "2026-08-21" };
+    const house = { houseVacation: false, houseVacationStart: "", houseVacationEnd: "" };
+    assert.equal(personAway(person, house, "2026-08-19"), true);
+    const back = returnDay(person, house, "2026-08-19");
+    assert.equal(back, "2026-08-22");
+    assert.equal(nextAllowedOnOrAfter(WED, back!), "2026-08-26");
+  });
+});
+
+describe("every three days", () => {
+  const lastMon = new Date("2026-08-17T23:30:00-05:00");
+
+  it("shows up three calendar days later", () => {
+    assert.equal(dueDayStr(lastMon, 3), "2026-08-20");
+    assert.equal(dirtinessRatio(lastMon, 3, new Date("2026-08-20T12:00:00-05:00")), 1);
+  });
+
+  it("stays hidden for due-only until that day, but peeks early otherwise", () => {
+    const tue = new Date("2026-08-18T12:00:00-05:00");
+    assert.equal(isDirtyEnough(lastMon, 3, tue, false), true);
+    assert.equal(isDirtyEnough(lastMon, 3, tue, true), false);
+    assert.equal(isDirtyEnough(lastMon, 3, new Date("2026-08-20T12:00:00-05:00"), true), true);
+  });
+
+  it("snaps a Thursday due date to Wednesday when only Wednesday is allowed", () => {
+    assert.equal(dueOnAllowedDay(lastMon, 3, WED, "2026-08-18", "2026-09-09"), "2026-08-26");
+  });
+});
+
+describe("room bar at due", () => {
+  it("stays nearly full when a chore is only just due", () => {
+    assert.equal(cleanlinessPct(1), 88);
+    assert.ok(cleanlinessPct(2) < 50);
+  });
+});

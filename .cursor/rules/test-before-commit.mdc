@@ -1,0 +1,8 @@
+---
+description: Run npm test before every git commit
+alwaysApply: true
+---
+
+# Tests before commit
+
+Run `npm test` and wait for a pass before every `git add` / `git commit`. Do not commit if tests fail. Do not skip with `--no-verify`.

@@ -2,7 +2,7 @@ import { prisma } from "./prisma";
 import { haConfig, listHaNotifyCatalog, postNotify, resolveNotifyTarget } from "./ha";
 import { appendIntegrationLog } from "./integration-log";
 import { displayTaskDifficulty, displayTaskName, isTaskEligible } from "./addon";
-import { dirtinessRatio, dueDayStr } from "./dirtiness";
+import { dirtinessRatio, dueOnAllowedDay } from "./dirtiness";
 import { calendarDayStr } from "./dates";
 import {
   isWeekendDate,
@@ -34,18 +34,6 @@ async function relocateOpen(
     return;
   }
   await prisma.dailyAssignment.update({ where: { id }, data: { date, ...extra } });
-}
-
-function dueOnlyTargetDate(
-  lastDoneAt: Date | string | null,
-  frequencyDays: number,
-  allowedDays: string | null,
-  fromDate: string,
-  until: string,
-) {
-  const due = dueDayStr(lastDoneAt, frequencyDays);
-  const start = !due || due < fromDate ? fromDate : due;
-  return nextAllowedOnOrAfter(allowedDays, start, until);
 }
 
 /** Keep the earliest open assignment per task; drop later copies. */
@@ -323,7 +311,7 @@ async function snapDueOnlyToDueDay(fromDate = todayStr(), horizon = 21) {
     include: { task: { select: { lastDoneAt: true, frequencyDays: true, allowedDays: true } } },
   });
   for (const a of open) {
-    const target = dueOnlyTargetDate(a.task.lastDoneAt, a.task.frequencyDays, a.task.allowedDays, fromDate, until);
+    const target = dueOnAllowedDay(a.task.lastDoneAt, a.task.frequencyDays, a.task.allowedDays, fromDate, until);
     if (!target || target === a.date) continue;
     const clash = await prisma.dailyAssignment.findUnique({
       where: { date_taskId: { date: target, taskId: a.taskId } },
@@ -378,7 +366,7 @@ async function placeDueOnlyOnDueDays(fromDate: string, horizon: number) {
   const toCreate: Array<{ date: string; userId: string; taskId: string; order: number }> = [];
   for (const task of tasks) {
     if (taken.has(task.id)) continue;
-    const date = dueOnlyTargetDate(task.lastDoneAt, task.frequencyDays, task.allowedDays, fromDate, until);
+    const date = dueOnAllowedDay(task.lastDoneAt, task.frequencyDays, task.allowedDays, fromDate, until);
     if (!date) continue;
 
     const allowed = (task.assignableUsers.length > 0

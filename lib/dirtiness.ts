@@ -1,4 +1,5 @@
 import { subDays } from "date-fns";
+import { nextAllowedOnOrAfter } from "./allowed-days";
 import { addCalendarDays, calendarDayStr, calendarDaysBetween } from "./dates";
 import { formatFrequency } from "./frequency";
 
@@ -26,6 +27,18 @@ export function showAt(dueOnly?: boolean) {
 export function dueDayStr(lastDoneAt: Date | string | null, frequencyDays: number): string | null {
   if (!lastDoneAt || frequencyDays <= 0) return null;
   return addCalendarDays(calendarDayStr(lastDoneAt), frequencyDays);
+}
+
+export function dueOnAllowedDay(
+  lastDoneAt: Date | string | null,
+  frequencyDays: number,
+  allowedDays: string | null | undefined,
+  fromDate: string,
+  until?: string,
+) {
+  const due = dueDayStr(lastDoneAt, frequencyDays);
+  const start = !due || due < fromDate ? fromDate : due;
+  return nextAllowedOnOrAfter(allowedDays, start, until);
 }
 
 export function isDirtyEnough(
