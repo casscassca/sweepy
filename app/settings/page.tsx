@@ -4,6 +4,12 @@ import Link from "next/link";
 import { ChevronDown, ChevronRight, Moon, ScrollText, Sun } from "lucide-react";
 import { format } from "date-fns";
 
+type LoadWeek = { needPts: number; capPts: number; needTasks: number; capTasks: number };
+type LoadStatus = {
+  taskCount: number;
+  week: LoadWeek;
+};
+
 type HaPerson = { name: string; target: string; resolved: string | null; ok: boolean; hint: string | null };
 type HaLog = { id: string; createdAt: string; kind: string; ok: boolean; userName: string; summary: string; detail: string };
 type HaStatus = {
@@ -28,6 +34,7 @@ export default function SettingsPage() {
   const [showLog, setShowLog] = useState(false);
   const [showHaDetails, setShowHaDetails] = useState(false);
   const [showHow, setShowHow] = useState(false);
+  const [load, setLoad] = useState<LoadStatus | null>(null);
 
   useEffect(() => {
     setWebhookUrl(`${window.location.origin}/api/ha-webhook`);
@@ -36,6 +43,10 @@ export default function SettingsPage() {
       .then((r) => r.json())
       .then(setHa)
       .catch(() => setHa(null));
+    fetch("/api/load")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => setLoad(data?.week ? data : null))
+      .catch(() => setLoad(null));
   }, []);
 
   function toggleDark() {
@@ -77,6 +88,7 @@ export default function SettingsPage() {
             {darkMode ? "Dark" : "Light"}
           </button>
         </div>
+        {load && <WorkloadCard load={load} />}
       </div>
 
       <div className="p-5 rounded-2xl space-y-3 mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
@@ -229,6 +241,76 @@ export default function SettingsPage() {
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+function fmt(n: number) {
+  const r = Math.round(n * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+}
+
+function WorkloadCard({ load }: { load: LoadStatus }) {
+  const gap = load.week.needPts - load.week.capPts;
+  const behind = gap > 0.05;
+  const scale = Math.max(load.week.needPts, load.week.capPts, 1);
+  const headline = behind
+    ? `${fmt(gap)} pts behind each week`
+    : gap < -0.05
+      ? `${fmt(-gap)} pts of slack each week`
+      : "Combined cap matches the catalog";
+
+  return (
+    <div className="mt-5 pt-5" style={{ borderTop: "1px solid var(--border)" }}>
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <h3 className="font-medium">Workload</h3>
+        <Link href="/users" className="text-xs shrink-0" style={{ color: "var(--accent)" }}>
+          Edit caps
+        </Link>
+      </div>
+      <p className="text-sm font-medium" style={{ color: behind ? "var(--red)" : "var(--green)" }}>
+        {headline}
+      </p>
+      <p className="text-xs mt-0.5 mb-4" style={{ color: "var(--text3)" }}>
+        Household total · whoever does the chores · add-ons at their own interval
+      </p>
+
+      <div className="relative h-2 rounded-full mb-3" style={{ background: "var(--surface2)" }}>
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${Math.min(100, (load.week.needPts / scale) * 100)}%`,
+            background: behind ? "var(--red)" : "var(--green)",
+          }}
+        />
+        <div
+          className="absolute top-0 bottom-0 w-0.5 rounded-full"
+          title="Combined weekly cap"
+          style={{
+            left: `${Math.min(100, (load.week.capPts / scale) * 100)}%`,
+            background: "var(--text)",
+            transform: "translateX(-50%)",
+          }}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-xs" style={{ color: "var(--text3)" }}>To stay current</p>
+          <p className="text-lg font-semibold tracking-tight">{fmt(load.week.needPts)} <span className="text-xs font-medium" style={{ color: "var(--text3)" }}>pts/week</span></p>
+          <p className="text-xs" style={{ color: "var(--text3)" }}>{fmt(load.week.needPts / 7)} / day</p>
+        </div>
+        <div>
+          <p className="text-xs" style={{ color: "var(--text3)" }}>Combined cap</p>
+          <p className="text-lg font-semibold tracking-tight">{fmt(load.week.capPts)} <span className="text-xs font-medium" style={{ color: "var(--text3)" }}>pts/week</span></p>
+          <p className="text-xs" style={{ color: "var(--text3)" }}>{fmt(load.week.capPts / 7)} / day</p>
+        </div>
+      </div>
+
+      <p className="text-xs mt-4" style={{ color: "var(--text3)" }}>
+        {fmt(load.week.needTasks)} chores/week · {fmt(load.week.capTasks)} task seats/week
+        {load.taskCount ? ` · ${load.taskCount} in the catalog` : ""}
+      </p>
     </div>
   );
 }
