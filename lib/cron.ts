@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { reshuffleFrom, sendDueReminders, sendNotificationsForTime } from "./scheduler";
+import { reshuffleFrom, sendDueReminders, sendNotificationsForTime, sendNudgesForTime } from "./scheduler";
 import { format } from "date-fns";
 
 let started = false;
@@ -20,6 +20,7 @@ export function startCron() {
   cron.schedule("* * * * *", async () => {
     const timeStr = format(new Date(), "HH:mm");
     await sendNotificationsForTime(timeStr);
+    await sendNudgesForTime(timeStr);
     await sendDueReminders();
   });
 

@@ -1019,3 +1019,25 @@ export async function sendNotificationsForTime(timeStr: string) {
     console.log(`[notify] ${timeStr} ${user.name}: sent ${result.sent}${result.reason ? ` (${result.reason})` : ""}`);
   }
 }
+
+export async function sendNudgesForTime(timeStr: string) {
+  const users = await prisma.user.findMany({
+    where: { nudgeTime: timeStr, haNotifyTarget: { not: "" } },
+  });
+  if (users.length === 0) return;
+
+  const ha = haConfig();
+  if (!ha) {
+    console.warn("[notify] nudge skipped — HA_URL or HA_TOKEN is not set");
+    return;
+  }
+
+  const day = todayStr();
+  const vac = await loadVacationContext(day);
+  for (const user of users) {
+    if (!user.nudgeTime || user.nudgeTime === user.notifyTime) continue;
+    if (personAway(user, vac.house, day)) continue;
+    const result = await sendNotificationsForUser(user.id, day, undefined, { replace: true });
+    console.log(`[notify] nudge ${timeStr} ${user.name}: sent ${result.sent}${result.reason ? ` (${result.reason})` : ""}`);
+  }
+}

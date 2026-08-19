@@ -231,6 +231,7 @@ export default function SettingsPage() {
             {[
               "At midnight, auto-picks are refreshed for the next few weeks so dirtier and important chores float up. Pins, things you moved by hand, and one-offs stay put",
               "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Yesterday. The bell on People clears their phone first, then resends from today's list",
+              "If they set a resend time, leftover banners are wiped at that time and any still-open chores go out again",
               "Done checks it off today. Tomorrow moves it to the next day. Yesterday moves it to yesterday and checks it off, and pulls in one more chore only if there is still room under today's cap",
               "Tasks can be checked off or deferred in the Today and Upcoming views too",
               "Pins, one-offs, and anything you add or move by hand stay on that day even if it goes over someone's cap. Extra auto-picks still slide forward",

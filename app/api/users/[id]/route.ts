@@ -6,6 +6,16 @@ import { prepareAssignments } from "@/lib/scheduler";
 import { ymd } from "@/lib/vacation";
 import { calendarDayStr } from "@/lib/dates";
 
+function hhmm(raw: unknown, fallback = ""): string {
+  if (typeof raw !== "string") return fallback;
+  const m = raw.trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return fallback;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return fallback;
+  return `${String(h).padStart(2, "0")}:${m[2]}`;
+}
+
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
@@ -40,7 +50,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const v = Math.round(Number(body.weekendTaskLimit));
     if (Number.isFinite(v)) data.weekendTaskLimit = Math.min(20, Math.max(0, v));
   }
-  if (typeof body.notifyTime === "string") data.notifyTime = body.notifyTime;
+  if (typeof body.notifyTime === "string") data.notifyTime = hhmm(body.notifyTime, "08:00");
+  if (typeof body.nudgeTime === "string") data.nudgeTime = hhmm(body.nudgeTime);
   if (typeof body.color === "string") data.color = body.color;
   if (typeof body.vacationOn === "boolean") data.vacationOn = body.vacationOn;
   if (body.vacationStart !== undefined) data.vacationStart = ymd(body.vacationStart);

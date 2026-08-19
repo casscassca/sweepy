@@ -60,6 +60,7 @@ model User {
   weekendCapacity  Int     @default(6)
   weekendTaskLimit Int     @default(4)
   notifyTime     String   @default("08:00")
+  nudgeTime      String   @default("")
   color          String   @default("#6366f1")
   createdAt      DateTime @default(now())
   // Auth: scrypt password hash (null = no password set, cannot log in yet).

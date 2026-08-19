@@ -27,9 +27,19 @@ function clampWeekend(n: unknown, fallback: number) {
   return Math.min(20, Math.max(0, v));
 }
 
+function hhmm(raw: unknown, fallback = ""): string {
+  if (typeof raw !== "string") return fallback;
+  const m = raw.trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return fallback;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return fallback;
+  return `${String(h).padStart(2, "0")}:${m[2]}`;
+}
+
 export async function POST(req: Request) {
   const body = await req.json();
-  const { name, haNotifyTarget, dailyCapacity, dailyTaskLimit, weekdayCapacities, weekdayTaskLimits, weekendShare, weekendCapacity, weekendTaskLimit, notifyTime, color } = body;
+  const { name, haNotifyTarget, dailyCapacity, dailyTaskLimit, weekdayCapacities, weekdayTaskLimits, weekendShare, weekendCapacity, weekendTaskLimit, color } = body;
   const pts = clampDaily(dailyCapacity);
   const tasks = clampDaily(dailyTaskLimit);
   const user = await prisma.user.create({
@@ -46,7 +56,8 @@ export async function POST(req: Request) {
       vacationOn: body.vacationOn === true,
       vacationStart: ymd(body.vacationStart),
       vacationEnd: ymd(body.vacationEnd),
-      notifyTime: notifyTime ?? "08:00",
+      notifyTime: hhmm(body.notifyTime, "08:00"),
+      nudgeTime: hhmm(body.nudgeTime),
       color: color ?? "#6366f1",
       webhookSecret: generateWebhookSecret(),
     },

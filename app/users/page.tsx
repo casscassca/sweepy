@@ -19,6 +19,7 @@ type User = {
   weekendCapacity?: number;
   weekendTaskLimit?: number;
   notifyTime: string;
+  nudgeTime?: string;
   color: string;
   webhookSecret: string;
   hasPassword: boolean;
@@ -171,6 +172,7 @@ function emptyForm(color: string) {
     weekendCapacity: "6",
     weekendTaskLimit: "4",
     notifyTime: "08:00",
+    nudgeTime: "",
     color,
     password: "",
     vacationOn: false,
@@ -229,6 +231,7 @@ export default function UsersPage() {
       weekendCapacity: String(user.weekendCapacity ?? 6),
       weekendTaskLimit: String(user.weekendTaskLimit ?? 4),
       notifyTime: user.notifyTime,
+      nudgeTime: user.nudgeTime ?? "",
       color: user.color,
       password: "",
       vacationOn: user.vacationOn === true,
@@ -371,6 +374,22 @@ export default function UsersPage() {
           <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Notify time</label>
           <input type="time" value={form.notifyTime} onChange={(e) => setForm((f) => ({ ...f, notifyTime: e.target.value }))} />
         </div>
+        <div>
+          <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>
+            Resend if still open
+            {form.nudgeTime && (
+              <button
+                type="button"
+                className="ml-2"
+                onClick={() => setForm((f) => ({ ...f, nudgeTime: "" }))}
+              >
+                Off
+              </button>
+            )}
+          </label>
+          <input type="time" value={form.nudgeTime} onChange={(e) => setForm((f) => ({ ...f, nudgeTime: e.target.value }))} />
+          <p className="text-xs mt-1.5" style={{ color: "var(--text3)" }}>Clears this morning's banners and sends what's left. Leave blank to skip.</p>
+        </div>
       </div>
       <div>
         <label className="block text-xs mb-2" style={{ color: "var(--text3)" }}>Color</label>
@@ -495,7 +514,9 @@ export default function UsersPage() {
                         return `${weekdays} · S+S ${user.weekendTaskLimit ?? 4} / ${user.weekendCapacity ?? 6} pts`;
                       })()}
                     </span>
-                    <span className="text-xs" style={{ color: "var(--text3)" }}>notify {user.notifyTime}</span>
+                    <span className="text-xs" style={{ color: "var(--text3)" }}>
+                      notify {user.notifyTime}{user.nudgeTime ? ` · again ${user.nudgeTime}` : ""}
+                    </span>
                     {user.haNotifyTarget && <span className="text-xs font-mono" style={{ color: "var(--text3)" }}>{user.haNotifyTarget}</span>}
                   </div>
                 </div>
