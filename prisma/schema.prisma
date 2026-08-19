@@ -54,6 +54,11 @@ model User {
   haNotifyTarget String   @default("")
   dailyCapacity  Int      @default(6)
   dailyTaskLimit Int      @default(6)
+  weekdayCapacities String @default("")
+  weekdayTaskLimits String @default("")
+  weekendShare     Boolean @default(true)
+  weekendCapacity  Int     @default(6)
+  weekendTaskLimit Int     @default(4)
   notifyTime     String   @default("08:00")
   color          String   @default("#6366f1")
   createdAt      DateTime @default(now())
@@ -64,6 +69,9 @@ model User {
   webhookSecret  String   @default("")
   // Assignment ids last pushed to this person's phone, so we can dismiss them.
   notifyTags     String   @default("")
+  vacationOn     Boolean  @default(false)
+  vacationStart  String   @default("")
+  vacationEnd    String   @default("")
   assignableTasks TaskAssignableUser[]
   assignments     DailyAssignment[]
   completions     CompletionLog[]
@@ -84,6 +92,7 @@ model DailyAssignment {
   held          Boolean   @default(false)
   // Stays on this day through Re-assign. Outranks one-offs when a day is stuffed.
   pinned        Boolean   @default(false)
+  parked        Boolean   @default(false)
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
@@ -110,6 +119,14 @@ model Settings {
   // Secret used to sign session cookies. Generated once on first use and kept
   // in the DB so it persists across deploys (the data volume) and never lives in git.
   sessionSecret String @default("")
+  weekendShare     Boolean @default(true)
+  weekendCapacity  Int     @default(6)
+  weekendTaskLimit Int     @default(4)
+  houseVacation      Boolean @default(false)
+  houseVacationStart String  @default("")
+  houseVacationEnd   String  @default("")
+  pauseDirtiness     Boolean @default(false)
+  dirtFrozenOn       String  @default("")
 }
 
 model IntegrationLog {

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { readJson } from "@/lib/read-json";
 
 type UserStats = {
   user: { id: string; name: string; color: string };
@@ -12,7 +13,7 @@ export default function StatsPage() {
   const [stats, setStats] = useState<UserStats[]>([]);
 
   useEffect(() => {
-    fetch("/api/stats").then((r) => r.json()).then(setStats);
+    fetch("/api/stats").then((res) => readJson<UserStats[]>(res, [])).then((data) => setStats(Array.isArray(data) ? data : []));
   }, []);
 
   const maxYearly = Math.max(...stats.map((s) => s.yearly), 1);

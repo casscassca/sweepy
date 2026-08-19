@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     }
 
     const assignments = await prisma.dailyAssignment.findMany({
-      where: { date: { in: days } },
+      where: { date: { in: days }, parked: false },
       include: {
         task: { include: { room: true, assignableUsers: { include: { user: true } } } },
         user: true,

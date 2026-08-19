@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Moon, ScrollText, Sun } from "lucide-react";
 import { format } from "date-fns";
+import { readJson } from "@/lib/read-json";
 
 type LoadWeek = { needPts: number; capPts: number; needTasks: number; capTasks: number };
 type LoadStatus = {
@@ -40,11 +41,11 @@ export default function SettingsPage() {
     setWebhookUrl(`${window.location.origin}/api/ha-webhook`);
     setDarkMode(document.documentElement.getAttribute("data-theme") === "dark");
     fetch("/api/ha-status")
-      .then((r) => r.json())
+      .then((res) => readJson<HaStatus | null>(res, null))
       .then(setHa)
       .catch(() => setHa(null));
     fetch("/api/load")
-      .then((r) => r.ok ? r.json() : null)
+      .then((res) => readJson<LoadStatus | null>(res, null))
       .then((data) => setLoad(data?.week ? data : null))
       .catch(() => setLoad(null));
   }, []);
@@ -229,7 +230,7 @@ export default function SettingsPage() {
             {[
               "At midnight, auto-picks are refreshed for the next few weeks so dirtier and important chores float up. Pins, things you moved by hand, and one-offs stay put",
               "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Yesterday. The bell on People clears their phone first, then resends from today's list",
-              "Done checks it off today. Tomorrow moves it to the next day. Yesterday moves it to yesterday and checks it off, and pulls in one more chore only if that person is still under their daily cap",
+              "Done checks it off today. Tomorrow moves it to the next day. Yesterday moves it to yesterday and checks it off, and pulls in one more chore only if there is still room under today's cap",
               "Tasks can be checked off or deferred in the Today and Upcoming views too",
               "Pins, one-offs, and anything you add or move by hand stay on that day even if it goes over someone's cap. Extra auto-picks still slide forward",
             ].map((line) => (
@@ -272,7 +273,7 @@ function WorkloadCard({ load }: { load: LoadStatus }) {
         {headline}
       </p>
       <p className="text-xs mt-0.5 mb-4" style={{ color: "var(--text3)" }}>
-        Household total · whoever does the chores · add-ons at their own interval
+        Household total · weekdays plus each person's weekend pot · add-ons at their own interval
       </p>
 
       <div className="relative h-2 rounded-full mb-3" style={{ background: "var(--surface2)" }}>

@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   if (searchParams.get("peek") !== "1") await prepareAssignments(date);
 
   const assignments = await prisma.dailyAssignment.findMany({
-    where: { date },
+    where: { date, parked: false },
     include: {
       task: { include: { room: true } },
       user: true,

@@ -14,7 +14,7 @@ export async function completeAssignment(opts: {
   if (!current) return { ok: false as const, status: 404 as const, reason: "not found" };
 
   if (opts.date && opts.date !== current.date) {
-    const moved = await holdAssignmentOnDate(id, opts.date);
+    const moved = await holdAssignmentOnDate(id, opts.date, { respectAllowed: false });
     if (!moved) return { ok: false as const, status: 404 as const, reason: "not found" };
     id = moved.id;
   }

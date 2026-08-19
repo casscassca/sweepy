@@ -1,4 +1,4 @@
-const WEEK = 7;
+import { weekCapacity, type PersonCaps } from "./capacity";
 
 export type LoadTask = {
   difficulty: number;
@@ -13,10 +13,7 @@ function addonOn(task: LoadTask) {
   return Boolean(task.addonName?.trim()) && (task.addonFrequencyDays ?? 0) > 0;
 }
 
-export type LoadPerson = {
-  dailyCapacity: number;
-  dailyTaskLimit: number;
-};
+export type LoadPerson = PersonCaps;
 
 export function taskPointLoadPerDay(task: LoadTask) {
   if (task.oneOff || task.frequencyDays <= 0) return 0;
@@ -34,22 +31,21 @@ export function householdLoad(tasks: LoadTask[], people: LoadPerson[]) {
   const catalog = tasks.filter((t) => !t.oneOff);
   const needPtsDay = catalog.reduce((s, t) => s + taskPointLoadPerDay(t), 0);
   const needTasksDay = catalog.reduce((s, t) => s + taskCountLoadPerDay(t), 0);
-  const capPtsDay = people.reduce((s, p) => s + p.dailyCapacity, 0);
-  const capTasksDay = people.reduce((s, p) => s + p.dailyTaskLimit, 0);
+  const weekCap = weekCapacity(people);
 
   return {
     taskCount: catalog.length,
     week: {
-      needPts: needPtsDay * WEEK,
-      capPts: capPtsDay * WEEK,
-      needTasks: needTasksDay * WEEK,
-      capTasks: capTasksDay * WEEK,
+      needPts: needPtsDay * 7,
+      capPts: weekCap.pts,
+      needTasks: needTasksDay * 7,
+      capTasks: weekCap.tasks,
     },
     day: {
       needPts: needPtsDay,
-      capPts: capPtsDay,
+      capPts: weekCap.pts / 7,
       needTasks: needTasksDay,
-      capTasks: capTasksDay,
+      capTasks: weekCap.tasks / 7,
     },
   };
 }

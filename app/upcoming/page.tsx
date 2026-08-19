@@ -18,6 +18,7 @@ import PersonMenu from "@/components/PersonMenu";
 import TaskNote from "@/components/TaskNote";
 import type { TaskFormTask } from "@/components/TaskFormFields";
 import { useHideDone } from "@/lib/hide-done";
+import { readJson } from "@/lib/read-json";
 
 type User = { id: string; name: string; color: string };
 type Task = TaskFormTask & { room: { name: string } | null; oneOff?: boolean };
@@ -34,7 +35,7 @@ function dayLabel(dateStr: string) {
 }
 
 
-function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove, onEdit, onReassign, onPin, dragHandleProps, isDragOverlay }: {
+function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove, onEdit, onReassign, onPin, dragHandleProps, isDragOverlay, dirtAsOf }: {
   assignment: Assignment; users: User[]; meId?: string;
   onComplete?: (id: string, by: string | null, date?: string) => void;
   onUncomplete?: (id: string) => void;
@@ -44,6 +45,7 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
   onPin?: (id: string, pinned: boolean) => void;
   dragHandleProps?: HTMLAttributes<HTMLElement>;
   isDragOverlay?: boolean;
+  dirtAsOf?: Date;
 }) {
   const [showWho, setShowWho] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
@@ -109,8 +111,8 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
           {!done && !assignment.task.oneOff && (
             <DirtGauge
               size={22}
-              ratio={dirtinessRatio(assignment.task.lastDoneAt, assignment.task.frequencyDays)}
-              title={dirtDetail(assignment.task.lastDoneAt, assignment.task.frequencyDays)}
+              ratio={dirtinessRatio(assignment.task.lastDoneAt, assignment.task.frequencyDays, dirtAsOf)}
+              title={dirtDetail(assignment.task.lastDoneAt, assignment.task.frequencyDays, dirtAsOf)}
             />
           )}
         </div>
@@ -240,17 +242,20 @@ export default function UpcomingPage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [addingDate, setAddingDate] = useState<string | null>(null);
   const [hideDone, setHideDone] = useHideDone();
+  const [dirtAsOf, setDirtAsOf] = useState<Date | undefined>();
 
   async function load() {
     setLoading(true);
-    const [upcomingRes, usersRes, meRes] = await Promise.all([
-      fetch(`/api/upcoming?from=${days[0]}`).then((r) => r.json().catch(() => ({}))),
-      fetch("/api/users").then((r) => r.json().catch(() => [])),
-      fetch("/api/auth/me").then((r) => r.json().catch(() => ({}))),
+    const [upcomingRes, usersRes, meRes, settings] = await Promise.all([
+      fetch(`/api/upcoming?from=${days[0]}`).then((res) => readJson<{ assignments?: Assignment[] }>(res, {})),
+      fetch("/api/users").then((res) => readJson<User[]>(res, [])),
+      fetch("/api/auth/me").then((res) => readJson<{ user?: User }>(res, {})),
+      fetch("/api/settings").then((res) => readJson<{ dirtAsOf?: string } | null>(res, null)),
     ]);
     setAssignments(Array.isArray(upcomingRes.assignments) ? upcomingRes.assignments : []);
     setUsers(Array.isArray(usersRes) ? usersRes : []);
     setMe(meRes.user ?? null);
+    setDirtAsOf(typeof settings?.dirtAsOf === "string" ? new Date(`${settings.dirtAsOf}T12:00:00`) : undefined);
     setLoading(false);
   }
 
@@ -427,6 +432,7 @@ export default function UpcomingPage() {
                           onEdit={a.task.oneOff ? undefined : setEditingTask}
                           onReassign={reassign}
                           onPin={pin}
+                          dirtAsOf={dirtAsOf}
                         />
                       ))}
                       {dayAssignments.length === 0 && (
@@ -443,7 +449,7 @@ export default function UpcomingPage() {
 
           <DragOverlay>
             {activeAssignment && (
-              <TaskCard assignment={activeAssignment} users={users} isDragOverlay />
+              <TaskCard assignment={activeAssignment} users={users} isDragOverlay dirtAsOf={dirtAsOf} />
             )}
           </DragOverlay>
         </DndContext>

@@ -2,43 +2,251 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Pencil, Trash2, Plus, KeyRound, RefreshCw, Check, Copy, Bell, ScrollText } from "lucide-react";
+import { encodeWeek, parseWeek } from "@/lib/capacity";
+import { calendarDayStr } from "@/lib/dates";
+import { readJson } from "@/lib/read-json";
+import { houseVacationActive, vacationActive } from "@/lib/vacation";
 
-type User = { id: string; name: string; haNotifyTarget: string; dailyCapacity: number; dailyTaskLimit: number; notifyTime: string; color: string; webhookSecret: string; hasPassword: boolean };
+type User = {
+  id: string;
+  name: string;
+  haNotifyTarget: string;
+  dailyCapacity: number;
+  dailyTaskLimit: number;
+  weekdayCapacities?: string;
+  weekdayTaskLimits?: string;
+  weekendShare?: boolean;
+  weekendCapacity?: number;
+  weekendTaskLimit?: number;
+  notifyTime: string;
+  color: string;
+  webhookSecret: string;
+  hasPassword: boolean;
+  vacationOn?: boolean;
+  vacationStart?: string;
+  vacationEnd?: string;
+};
 type UserStats = { user: User; weekly: number; monthly: number; yearly: number };
+type HouseVac = {
+  houseVacation: boolean;
+  houseVacationStart: string;
+  houseVacationEnd: string;
+  pauseDirtiness: boolean;
+};
 
 const COLORS = ["#a78bfa", "#f472b6", "#fb923c", "#34d399", "#60a5fa", "#f87171", "#facc15", "#2dd4bf"];
+const DAY_LETTERS = ["M", "T", "W", "T", "F"];
+
+function CapCell({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
+  return (
+    <input
+      type="number"
+      min={0}
+      max={20}
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(Math.min(20, Math.max(0, Number(e.target.value) || 0)))}
+      className="text-center text-sm tabular-nums"
+      style={{ width: "100%", padding: "6px 0", fontSize: 14 }}
+    />
+  );
+}
+
+function CapacityGrid({
+  tasks,
+  pts,
+  weekendShare,
+  weekendTasks,
+  weekendPts,
+  onTasks,
+  onPts,
+  onWeekendShare,
+  onWeekendTasks,
+  onWeekendPts,
+}: {
+  tasks: number[];
+  pts: number[];
+  weekendShare: boolean;
+  weekendTasks: number;
+  weekendPts: number;
+  onTasks: (next: number[]) => void;
+  onPts: (next: number[]) => void;
+  onWeekendShare: (on: boolean) => void;
+  onWeekendTasks: (n: number) => void;
+  onWeekendPts: (n: number) => void;
+}) {
+  const days = weekendShare ? [...DAY_LETTERS, "S+S"] : [...DAY_LETTERS, "S", "S"];
+  const taskVals = weekendShare ? [...tasks.slice(0, 5), weekendTasks] : tasks.slice(0, 7);
+  const ptVals = weekendShare ? [...pts.slice(0, 5), weekendPts] : pts.slice(0, 7);
+  const labels = weekendShare ? [...DAY_LETTERS, "Weekend"] : [...DAY_LETTERS, "Sat", "Sun"];
+  function setDay(kind: "tasks" | "pts", i: number, v: number) {
+    if (weekendShare && i === 5) {
+      if (kind === "tasks") onWeekendTasks(v);
+      else onWeekendPts(v);
+      return;
+    }
+    if (kind === "tasks") {
+      const next = [...tasks.slice(0, 7)];
+      while (next.length < 7) next.push(next[next.length - 1] ?? 0);
+      next[i] = v;
+      onTasks(next);
+    } else {
+      const next = [...pts.slice(0, 7)];
+      while (next.length < 7) next.push(next[next.length - 1] ?? 0);
+      next[i] = v;
+      onPts(next);
+    }
+  }
+  return (
+    <>
+    <div
+      className="grid gap-x-1 gap-y-1 items-center"
+      style={{ gridTemplateColumns: `2.5rem repeat(${days.length}, minmax(0, 1fr))` }}
+    >
+      <span />
+      {days.map((letter, i) => (
+        <span key={`h-${letter}-${i}`} className="text-center text-[11px]" style={{ color: "var(--text3)" }}>{letter}</span>
+      ))}
+      <span className="text-[11px]" style={{ color: "var(--text3)" }}>tasks</span>
+      {taskVals.map((n, i) => (
+        <CapCell
+          key={`t-${i}`}
+          label={`${labels[i]} tasks`}
+          value={n}
+          onChange={(v) => setDay("tasks", i, v)}
+        />
+      ))}
+      <span className="text-[11px]" style={{ color: "var(--text3)" }}>pts</span>
+      {ptVals.map((n, i) => (
+        <CapCell
+          key={`p-${i}`}
+          label={`${labels[i]} points`}
+          value={n}
+          onChange={(v) => setDay("pts", i, v)}
+        />
+      ))}
+    </div>
+    <label className="flex items-center gap-2 mt-2.5 text-sm">
+      <input type="checkbox" checked={weekendShare} onChange={(e) => onWeekendShare(e.target.checked)} />
+      Combine Sat and Sun
+    </label>
+  </>
+  );
+}
+
+function VacationDates({
+  start,
+  end,
+  onStart,
+  onEnd,
+}: {
+  start: string;
+  end: string;
+  onStart: (v: string) => void;
+  onEnd: (v: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>From</label>
+        <input type="date" value={start} onChange={(e) => onStart(e.target.value)} />
+      </div>
+      <div>
+        <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Until</label>
+        <input type="date" value={end} onChange={(e) => onEnd(e.target.value)} />
+      </div>
+    </div>
+  );
+}
+
+function emptyForm(color: string) {
+  return {
+    name: "",
+    haNotifyTarget: "",
+    dailyCapacity: "6",
+    dailyTaskLimit: "6",
+    weekdayCapacities: encodeWeek([6, 6, 6, 6, 6, 6, 6]),
+    weekdayTaskLimits: encodeWeek([6, 6, 6, 6, 6, 6, 6]),
+    weekendShare: true,
+    weekendCapacity: "6",
+    weekendTaskLimit: "4",
+    notifyTime: "08:00",
+    color,
+    password: "",
+    vacationOn: false,
+    vacationStart: "",
+    vacationEnd: "",
+  };
+}
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<UserStats[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
-  const [form, setForm] = useState({ name: "", haNotifyTarget: "", dailyCapacity: "6", dailyTaskLimit: "6", notifyTime: "08:00", color: COLORS[0], password: "" });
+  const [form, setForm] = useState(emptyForm(COLORS[0]));
+  const [house, setHouse] = useState<HouseVac>({
+    houseVacation: false,
+    houseVacationStart: "",
+    houseVacationEnd: "",
+    pauseDirtiness: false,
+  });
   const [showToken, setShowToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [notifyMsg, setNotifyMsg] = useState<string | null>(null);
   const [notifyDetail, setNotifyDetail] = useState<string[] | null>(null);
 
   async function load() {
-    const [u, s] = await Promise.all([
-      fetch("/api/users").then((r) => r.json()),
-      fetch("/api/stats").then((r) => r.json()),
+    const [u, s, settings] = await Promise.all([
+      fetch("/api/users").then((res) => readJson<User[]>(res, [])),
+      fetch("/api/stats").then((res) => readJson<UserStats[]>(res, [])),
+      fetch("/api/settings").then((res) => readJson<HouseVac & { houseVacation?: boolean } | null>(res, null)),
     ]);
-    setUsers(u);
-    setStats(s);
+    setUsers(Array.isArray(u) ? u : []);
+    setStats(Array.isArray(s) ? s : []);
+    if (settings) {
+      setHouse({
+        houseVacation: settings.houseVacation === true,
+        houseVacationStart: settings.houseVacationStart ?? "",
+        houseVacationEnd: settings.houseVacationEnd ?? "",
+        pauseDirtiness: settings.pauseDirtiness === true,
+      });
+    }
   }
 
   useEffect(() => { load(); }, []);
 
   function startEdit(user: User) {
     setEditing(user);
-    setForm({ name: user.name, haNotifyTarget: user.haNotifyTarget, dailyCapacity: String(user.dailyCapacity), dailyTaskLimit: String(user.dailyTaskLimit ?? 6), notifyTime: user.notifyTime, color: user.color, password: "" });
+    setForm({
+      name: user.name,
+      haNotifyTarget: user.haNotifyTarget,
+      dailyCapacity: String(user.dailyCapacity),
+      dailyTaskLimit: String(user.dailyTaskLimit ?? 6),
+      weekdayCapacities: encodeWeek(parseWeek(user.weekdayCapacities, user.dailyCapacity)),
+      weekdayTaskLimits: encodeWeek(parseWeek(user.weekdayTaskLimits, user.dailyTaskLimit ?? 6)),
+      weekendShare: user.weekendShare !== false,
+      weekendCapacity: String(user.weekendCapacity ?? 6),
+      weekendTaskLimit: String(user.weekendTaskLimit ?? 4),
+      notifyTime: user.notifyTime,
+      color: user.color,
+      password: "",
+      vacationOn: user.vacationOn === true,
+      vacationStart: user.vacationStart ?? "",
+      vacationEnd: user.vacationEnd ?? "",
+    });
+    setShowToken(null);
     setShowForm(true);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditing(null);
   }
 
   function startNew() {
     setEditing(null);
-    setForm({ name: "", haNotifyTarget: "", dailyCapacity: "6", dailyTaskLimit: "6", notifyTime: "08:00", color: COLORS[users.length % COLORS.length], password: "" });
+    setForm(emptyForm(COLORS[users.length % COLORS.length]));
     setShowForm(true);
   }
 
@@ -46,14 +254,27 @@ export default function UsersPage() {
     e.preventDefault();
     // Only send a password when one was typed (blank = leave unchanged).
     const { password, ...rest } = form;
-    const body: Record<string, unknown> = { ...rest, dailyCapacity: Number(form.dailyCapacity), dailyTaskLimit: Number(form.dailyTaskLimit) };
+    const body: Record<string, unknown> = {
+      ...rest,
+      dailyCapacity: Number(form.dailyCapacity),
+      dailyTaskLimit: Number(form.dailyTaskLimit),
+      weekdayCapacities: form.weekdayCapacities,
+      weekdayTaskLimits: form.weekdayTaskLimits,
+      weekendShare: form.weekendShare !== false,
+      weekendCapacity: Number(form.weekendCapacity),
+      weekendTaskLimit: Number(form.weekendTaskLimit),
+      vacationOn: form.vacationOn === true,
+      vacationStart: form.vacationStart,
+      vacationEnd: form.vacationEnd,
+    };
     if (password.trim()) body.password = password;
     if (editing) {
       await fetch(`/api/users/${editing.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     } else {
       await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     }
-    setShowForm(false); setEditing(null); load();
+    closeForm();
+    load();
   }
 
   async function regenerateToken(id: string) {
@@ -93,7 +314,108 @@ export default function UsersPage() {
     load();
   }
 
+  async function saveHouse(next: HouseVac) {
+    setHouse(next);
+    await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(next),
+    });
+  }
+
+  const today = calendarDayStr();
+  const houseAway = houseVacationActive(house, today);
+
   const maxYearly = Math.max(...stats.map((s) => s.yearly), 1);
+
+  const formFields = (
+    <form onSubmit={save} className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="sm:col-span-2">
+          <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Name</label>
+          <input required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Cassandra" autoFocus />
+        </div>
+        <div className="sm:col-span-2">
+          <p className="text-xs mb-2" style={{ color: "var(--text3)" }}>Capacity · tasks then points</p>
+          <CapacityGrid
+            tasks={parseWeek(form.weekdayTaskLimits, Number(form.dailyTaskLimit) || 0)}
+            pts={parseWeek(form.weekdayCapacities, Number(form.dailyCapacity) || 0)}
+            weekendShare={form.weekendShare !== false}
+            weekendTasks={Number(form.weekendTaskLimit) || 0}
+            weekendPts={Number(form.weekendCapacity) || 0}
+            onTasks={(next) => setForm((f) => ({
+              ...f,
+              weekdayTaskLimits: encodeWeek(next),
+              dailyTaskLimit: String(next[0] ?? 0),
+            }))}
+            onPts={(next) => setForm((f) => ({
+              ...f,
+              weekdayCapacities: encodeWeek(next),
+              dailyCapacity: String(next[0] ?? 0),
+            }))}
+            onWeekendShare={(on) => setForm((f) => ({ ...f, weekendShare: on }))}
+            onWeekendTasks={(n) => setForm((f) => ({ ...f, weekendTaskLimit: String(n) }))}
+            onWeekendPts={(n) => setForm((f) => ({ ...f, weekendCapacity: String(n) }))}
+          />
+          <p className="text-xs mt-2" style={{ color: "var(--text3)" }}>
+            {form.weekendShare !== false
+              ? "S+S is this person's Sat and Sun pot, not each day. Pins and drags can go over."
+              : "Sat and Sun are their own days. Pins and drags can go over."}
+          </p>
+        </div>
+        <div>
+          <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>HA notify target</label>
+          <input value={form.haNotifyTarget} onChange={(e) => setForm((f) => ({ ...f, haNotifyTarget: e.target.value }))} placeholder="notify.pixel or notify.mobile_app_pixel" />
+        </div>
+        <div>
+          <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Notify time</label>
+          <input type="time" value={form.notifyTime} onChange={(e) => setForm((f) => ({ ...f, notifyTime: e.target.value }))} />
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs mb-2" style={{ color: "var(--text3)" }}>Color</label>
+        <div className="flex gap-2 flex-wrap">
+          {COLORS.map((c) => (
+            <button key={c} type="button" onClick={() => setForm((f) => ({ ...f, color: c }))} className="w-7 h-7 rounded-full transition-all" style={{ background: c, outline: form.color === c ? `2px solid ${c}` : "2px solid transparent", outlineOffset: "2px", transform: form.color === c ? "scale(1.2)" : "scale(1)" }} />
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>
+          {editing ? "Login password" : "Login password (optional)"}
+        </label>
+        <input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder={editing && editing.hasPassword ? "•••••••• (leave blank to keep)" : "Set a password"} autoComplete="new-password" />
+        <p className="text-xs mt-1.5" style={{ color: "var(--text3)" }}>This person uses it to log in. Leave blank to keep the current one.</p>
+      </div>
+      <div className="sm:col-span-2 pt-1" style={{ borderTop: "1px solid var(--border)" }}>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.vacationOn === true}
+            onChange={(e) => setForm((f) => ({ ...f, vacationOn: e.target.checked }))}
+          />
+          Vacation
+        </label>
+        {form.vacationOn === true && (
+          <div className="mt-3 space-y-2">
+            <VacationDates
+              start={form.vacationStart}
+              end={form.vacationEnd}
+              onStart={(v) => setForm((f) => ({ ...f, vacationStart: v }))}
+              onEnd={(v) => setForm((f) => ({ ...f, vacationEnd: v }))}
+            />
+            <p className="text-xs" style={{ color: "var(--text3)" }}>
+              Optional dates. Leave them blank to stay off until you uncheck. No notifies. Pins and one-offs wait off today. Dirt keeps accumulating.
+            </p>
+          </div>
+        )}
+      </div>
+      <div className="flex gap-2 pt-1">
+        <button type="submit" className="px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: "var(--accent)" }}>Save</button>
+        <button type="button" onClick={closeForm} className="px-4 py-2 rounded-xl text-sm" style={{ color: "var(--text3)" }}>Cancel</button>
+      </div>
+    </form>
+  );
 
   return (
     <div>
@@ -121,64 +443,65 @@ export default function UsersPage() {
         </div>
       )}
 
-      {showForm && (
-        <div className="mb-6 p-5 rounded-2xl space-y-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
-          <h2 className="font-medium">{editing ? "Edit person" : "New person"}</h2>
-          <form onSubmit={save} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2">
-                <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Name</label>
-                <input required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Cassandra" autoFocus />
-              </div>
-              <div>
-                <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Daily points</label>
-                <input type="number" min={1} max={20} required value={form.dailyCapacity} onChange={(e) => setForm((f) => ({ ...f, dailyCapacity: e.target.value }))} />
-              </div>
-              <div>
-                <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Daily tasks</label>
-                <input type="number" min={1} max={20} required value={form.dailyTaskLimit} onChange={(e) => setForm((f) => ({ ...f, dailyTaskLimit: e.target.value }))} />
-              </div>
-              <p className="text-xs sm:col-span-2 -mt-2" style={{ color: "var(--text3)" }}>
-                Auto-assign stops at these. Pins, one-offs, and anything you drag on can go over.
-              </p>
-              <div>
-                <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>HA notify target</label>
-                <input value={form.haNotifyTarget} onChange={(e) => setForm((f) => ({ ...f, haNotifyTarget: e.target.value }))} placeholder="notify.pixel or notify.mobile_app_pixel" />
-              </div>
-              <div>
-                <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Notify time</label>
-                <input type="time" value={form.notifyTime} onChange={(e) => setForm((f) => ({ ...f, notifyTime: e.target.value }))} />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs mb-2" style={{ color: "var(--text3)" }}>Color</label>
-              <div className="flex gap-2 flex-wrap">
-                {COLORS.map((c) => (
-                  <button key={c} type="button" onClick={() => setForm((f) => ({ ...f, color: c }))} className="w-7 h-7 rounded-full transition-all" style={{ background: c, outline: form.color === c ? `2px solid ${c}` : "2px solid transparent", outlineOffset: "2px", transform: form.color === c ? "scale(1.2)" : "scale(1)" }} />
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>
-                {editing ? "Login password" : "Login password (optional)"}
-              </label>
-              <input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder={editing && editing.hasPassword ? "•••••••• (leave blank to keep)" : "Set a password"} autoComplete="new-password" />
-              <p className="text-xs mt-1.5" style={{ color: "var(--text3)" }}>This person uses it to log in. Leave blank to keep the current one.</p>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button type="submit" className="px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: "var(--accent)" }}>Save</button>
-              <button type="button" onClick={() => { setShowForm(false); setEditing(null); }} className="px-4 py-2 rounded-xl text-sm" style={{ color: "var(--text3)" }}>Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
-
       <div className="space-y-3">
+        <div className="p-5 rounded-2xl space-y-3" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={house.houseVacation}
+              onChange={(e) => saveHouse({
+                ...house,
+                houseVacation: e.target.checked,
+                pauseDirtiness: e.target.checked ? house.pauseDirtiness : false,
+              })}
+            />
+            House vacation
+          </label>
+          {house.houseVacation && (
+            <div className="space-y-3">
+              <VacationDates
+                start={house.houseVacationStart}
+                end={house.houseVacationEnd}
+                onStart={(v) => saveHouse({ ...house, houseVacationStart: v })}
+                onEnd={(v) => saveHouse({ ...house, houseVacationEnd: v })}
+              />
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={house.pauseDirtiness}
+                  onChange={(e) => saveHouse({ ...house, pauseDirtiness: e.target.checked })}
+                />
+                Pause dirtiness
+              </label>
+              <p className="text-xs" style={{ color: "var(--text3)" }}>
+                {houseAway
+                  ? house.pauseDirtiness
+                    ? "Everyone is away. Chores stay as dirty as they are now."
+                    : "Everyone is away. Chores keep getting dirtier."
+                  : "Optional dates. Leave them blank to stay off until you uncheck."}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {showForm && !editing && (
+          <div className="p-5 rounded-2xl space-y-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
+            <h2 className="font-medium">New person</h2>
+            {formFields}
+          </div>
+        )}
+
         {users.map((user) => {
           const userStats = stats.find((s) => s.user.id === user.id);
           return (
             <div key={user.id} className="rounded-2xl overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
-              {/* Person row */}
+              {editing?.id === user.id ? (
+                <div className="p-5 space-y-4">
+                  <h2 className="font-medium">Edit {user.name}</h2>
+                  {formFields}
+                </div>
+              ) : (
+              <>
               <div className="flex items-center gap-3 sm:gap-4 px-4 py-4 group">
                 <span className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0" style={{ background: user.color + "22", color: user.color }}>
                   {user.name[0].toUpperCase()}
@@ -186,12 +509,32 @@ export default function UsersPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-medium flex items-center gap-2">
                     {user.name}
+                    {(houseAway || vacationActive(user, today)) && (
+                      <span className="text-xs font-normal px-1.5 py-px rounded-full" style={{ background: "var(--accent)22", color: "var(--accent)" }}>away</span>
+                    )}
                     {!user.hasPassword && (
                       <span className="text-xs font-normal px-1.5 py-px rounded-full" style={{ background: "var(--red)22", color: "var(--red)" }}>no password</span>
                     )}
                   </p>
                   <div className="flex gap-4 mt-0.5 flex-wrap">
-                    <span className="text-xs" style={{ color: "var(--text3)" }}>{user.dailyTaskLimit} task{user.dailyTaskLimit === 1 ? "" : "s"} · {user.dailyCapacity} pts/day</span>
+                    <span className="text-xs" style={{ color: "var(--text3)" }}>
+                      {(() => {
+                        const weekTasks = parseWeek(user.weekdayTaskLimits, user.dailyTaskLimit);
+                        const weekPts = parseWeek(user.weekdayCapacities, user.dailyCapacity);
+                        const tasks = weekTasks.slice(0, 5);
+                        const pts = weekPts.slice(0, 5);
+                        const flat = tasks.every((n) => n === tasks[0]) && pts.every((n) => n === pts[0]);
+                        const weekdays = flat
+                          ? `${tasks[0]} task${tasks[0] === 1 ? "" : "s"} · ${pts[0]} pts weekdays`
+                          : `M–F ${tasks.join(" ")} tasks`;
+                        if (user.weekendShare === false) {
+                          const same = weekTasks[5] === weekTasks[6] && weekPts[5] === weekPts[6];
+                          if (same) return `${weekdays} · S S ${weekTasks[5]} / ${weekPts[5]} pts`;
+                          return `${weekdays} · Sat ${weekTasks[5]} / ${weekPts[5]} · Sun ${weekTasks[6]} / ${weekPts[6]}`;
+                        }
+                        return `${weekdays} · S+S ${user.weekendTaskLimit ?? 4} / ${user.weekendCapacity ?? 6} pts`;
+                      })()}
+                    </span>
                     <span className="text-xs" style={{ color: "var(--text3)" }}>notify {user.notifyTime}</span>
                     {user.haNotifyTarget && <span className="text-xs font-mono" style={{ color: "var(--text3)" }}>{user.haNotifyTarget}</span>}
                   </div>
@@ -252,6 +595,8 @@ export default function UsersPage() {
                     </div>
                   )}
                 </div>
+              )}
+              </>
               )}
             </div>
           );

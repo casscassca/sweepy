@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import Link from "next/link";
 import { ArrowLeft, RotateCcw } from "lucide-react";
+import { readJson } from "@/lib/read-json";
 
 type Person = { id: string; name: string; color: string };
 type Entry = {
@@ -62,8 +63,8 @@ export default function HistoryPage() {
     if (who !== "all") params.set("userId", who);
     if (before) params.set("before", before);
     const [hist, people] = await Promise.all([
-      fetch(`/api/history?${params}`).then((r) => r.json().catch(() => ({ entries: [] }))),
-      reset ? fetch("/api/users").then((r) => r.json().catch(() => [])) : Promise.resolve(null),
+      fetch(`/api/history?${params}`).then((res) => readJson<{ entries?: Entry[]; nextBefore?: string }>(res, { entries: [] })),
+      reset ? fetch("/api/users").then((res) => readJson<Person[]>(res, [])) : Promise.resolve(null),
     ]);
     const page = Array.isArray(hist.entries) ? hist.entries : [];
     setEntries((prev) => (reset ? page : [...prev, ...page]));

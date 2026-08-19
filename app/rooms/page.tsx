@@ -7,7 +7,9 @@ import CompleteAsMenu from "@/components/CompleteAsMenu";
 import RoomDirtGauge from "@/components/RoomDirtGauge";
 import DirtGauge from "@/components/DirtGauge";
 import { addonDetail, displayTaskDifficulty, displayTaskName, hasAddon } from "@/lib/addon";
+import { formatAllowedDays } from "@/lib/allowed-days";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
+import { readJson } from "@/lib/read-json";
 
 type User = { id: string; name: string; color: string };
 type Task = {
@@ -66,6 +68,7 @@ function CatalogTaskRow({
   onUncomplete,
   onEdit,
   onDelete,
+  dirtAsOf,
 }: {
   task: Task;
   users: User[];
@@ -78,6 +81,7 @@ function CatalogTaskRow({
   onUncomplete: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  dirtAsOf?: Date;
 }) {
   const [showWho, setShowWho] = useState(false);
   const done = doneOn(task.lastDoneAt, today);
@@ -99,8 +103,8 @@ function CatalogTaskRow({
         {done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
       </button>
       <DirtGauge
-        ratio={dirtinessRatio(task.lastDoneAt, task.frequencyDays)}
-        title={dirtDetail(task.lastDoneAt, task.frequencyDays)}
+        ratio={dirtinessRatio(task.lastDoneAt, task.frequencyDays, dirtAsOf)}
+        title={dirtDetail(task.lastDoneAt, task.frequencyDays, dirtAsOf)}
       />
       <div className="flex-1 min-w-0">
         <div
@@ -182,19 +186,22 @@ export default function RoomsPage() {
   const [addingId, setAddingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [meId, setMeId] = useState<string | undefined>();
+  const [dirtAsOf, setDirtAsOf] = useState<Date | undefined>();
   const today = format(new Date(), "yyyy-MM-dd");
 
   async function load() {
-    const [r, u, a, me] = await Promise.all([
-      fetch("/api/rooms").then((r) => r.json()),
-      fetch("/api/users").then((r) => r.json()),
-      fetch(`/api/assignments?date=${today}&peek=1`).then((r) => r.json()),
-      fetch("/api/auth/me").then((r) => r.json().catch(() => ({}))),
+    const [r, u, a, me, settings] = await Promise.all([
+      fetch("/api/rooms").then((res) => readJson<Room[]>(res, [])),
+      fetch("/api/users").then((res) => readJson<User[]>(res, [])),
+      fetch(`/api/assignments?date=${today}&peek=1`).then((res) => readJson<{ task: { id: string } }[]>(res, [])),
+      fetch("/api/auth/me").then((res) => readJson<{ user?: { id: string } }>(res, {})),
+      fetch("/api/settings").then((res) => readJson<{ dirtAsOf?: string } | null>(res, null)),
     ]);
-    setRooms(r);
-    setUsers(u);
-    setOnToday(new Set((Array.isArray(a) ? a : []).map((x: { task: { id: string } }) => x.task.id)));
+    setRooms(Array.isArray(r) ? r : []);
+    setUsers(Array.isArray(u) ? u : []);
+    setOnToday(new Set((Array.isArray(a) ? a : []).map((x) => x.task.id)));
     setMeId(me.user?.id);
+    setDirtAsOf(typeof settings?.dirtAsOf === "string" ? new Date(`${settings.dirtAsOf}T12:00:00`) : undefined);
   }
 
   useEffect(() => { load(); }, []);
@@ -418,7 +425,7 @@ export default function RoomsPage() {
                   <div key={task.id} style={{ borderBottom: "1px solid var(--border)" }}>
                     {editingTask?.id === task.id ? (
                       <form onSubmit={(e) => saveTask(e, room.id)} className="p-4 space-y-3">
-                        <TaskFormFields task={task} users={users} />
+                        <TaskFormFields key={task.id} task={task} users={users} dirtAsOf={dirtAsOf} />
                         <div className="flex gap-2">
                           <button type="submit" className="px-3 py-1.5 rounded-lg text-sm font-medium text-white" style={{ background: "var(--accent)" }}>Save</button>
                           <button type="button" onClick={() => setEditingTask(null)} className="px-3 py-1.5 rounded-lg text-sm" style={{ color: "var(--text3)" }}>Cancel</button>
@@ -437,6 +444,7 @@ export default function RoomsPage() {
                         onUncomplete={() => uncompleteTask(task.id)}
                         onEdit={() => setEditingTask({ ...task, roomId: room.id })}
                         onDelete={() => deleteTask(task.id)}
+                        dirtAsOf={dirtAsOf}
                       />
                     )}
                   </div>
@@ -444,7 +452,7 @@ export default function RoomsPage() {
 
                 {taskForms[room.id] ? (
                   <form onSubmit={(e) => saveTask(e, room.id)} className="p-4 space-y-3">
-                    <TaskFormFields users={users} />
+                    <TaskFormFields key={`new-${room.id}`} users={users} dirtAsOf={dirtAsOf} />
                     <div className="flex gap-2">
                       <button type="submit" className="px-3 py-1.5 rounded-lg text-sm font-medium text-white" style={{ background: "var(--accent)" }}>Add Task</button>
                       <button type="button" onClick={() => setTaskForms((f) => ({ ...f, [room.id]: false }))} className="px-3 py-1.5 rounded-lg text-sm" style={{ color: "var(--text3)" }}>Cancel</button>
@@ -476,12 +484,4 @@ export default function RoomsPage() {
       </div>
     </div>
   );
-}
-
-const DAY_FULL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function formatAllowedDays(allowedDays: string): string {
-  const days = allowedDays.split(",").map(Number).sort();
-  if (days.length === 7) return "";
-  return days.map((d) => DAY_FULL[d]).join(", ");
 }

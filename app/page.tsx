@@ -13,6 +13,7 @@ import PersonMenu from "@/components/PersonMenu";
 import TaskNote from "@/components/TaskNote";
 import { assignmentDifficulty, assignmentLabel } from "@/lib/addon";
 import { useHideDone } from "@/lib/hide-done";
+import { readJson } from "@/lib/read-json";
 
 type User = { id: string; name: string; color: string; dailyCapacity: number; dailyTaskLimit?: number };
 type Task = { id: string; name: string; difficulty: number; oneOff?: boolean; important?: boolean; notes?: string; addonName?: string; addonFrequencyDays?: number; addonPoints?: number; addonLastDoneAt?: string | null; lastDoneAt?: string | null; frequencyDays?: number; dueOnly?: boolean; room: { name: string } | null };
@@ -157,9 +158,9 @@ export default function TodayPage() {
 
   async function load() {
     const [a, u, me] = await Promise.all([
-      fetch(`/api/assignments?date=${today}`).then((r) => r.json().catch(() => [])),
-      fetch("/api/users").then((r) => r.json().catch(() => [])),
-      fetch("/api/auth/me").then((r) => r.json().catch(() => ({}))),
+      fetch(`/api/assignments?date=${today}`).then((res) => readJson(res, [])),
+      fetch("/api/users").then((res) => readJson(res, [])),
+      fetch("/api/auth/me").then((res) => readJson<{ user?: { id: string } }>(res, {})),
     ]);
     setAssignments(Array.isArray(a) ? a : []);
     setUsers(Array.isArray(u) ? u : []);

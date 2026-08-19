@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import DirtSlider from "@/components/DirtSlider";
 import { lastDoneAtFromRatio } from "@/lib/dirtiness";
 import { daysForFrequency, FREQ_UNITS, splitFrequency, type FreqUnit } from "@/lib/frequency";
+import { allowedMask, DAY_SHORT, encodeAllowedDays } from "@/lib/allowed-days";
 
 export { formatFrequency } from "@/lib/frequency";
 
@@ -25,8 +26,6 @@ export type TaskFormTask = {
   assignableUsers: { user: TaskFormUser }[];
 };
 
-const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-
 export function parseTaskForm(form: HTMLFormElement) {
   const name = (form.elements.namedItem("name") as HTMLInputElement).value;
   const difficulty = Number((form.elements.namedItem("difficulty") as HTMLSelectElement).value);
@@ -34,8 +33,8 @@ export function parseTaskForm(form: HTMLFormElement) {
   const freqUnit = ((form.elements.namedItem("freqUnit") as HTMLSelectElement).value || "week") as FreqUnit;
   const frequencyDays = daysForFrequency(freqCount, freqUnit);
   const selected = Array.from(form.querySelectorAll<HTMLInputElement>("input[name=assignable]:checked")).map((el) => el.value);
-  const checkedDays = Array.from(form.querySelectorAll<HTMLInputElement>("input[name=day]:checked")).map((el) => el.value);
-  const allowedDays = checkedDays.length === 7 || checkedDays.length === 0 ? null : checkedDays.join(",");
+  const checkedDays = Array.from(form.querySelectorAll<HTMLInputElement>("input[name=day]:checked")).map((el) => Number(el.value));
+  const allowedDays = encodeAllowedDays(checkedDays);
   const dirtRatio = Number((form.elements.namedItem("dirtRatio") as HTMLInputElement).value);
   const lastDone = lastDoneAtFromRatio(dirtRatio, frequencyDays);
   const important = (form.elements.namedItem("important") as HTMLInputElement)?.checked ?? false;
@@ -71,11 +70,13 @@ export function parseTaskForm(form: HTMLFormElement) {
 export default function TaskFormFields({
   task,
   users,
+  dirtAsOf,
 }: {
   task?: TaskFormTask;
   users: TaskFormUser[];
+  dirtAsOf?: Date;
 }) {
-  const activeDays = task?.allowedDays ? task.allowedDays.split(",").map(Number) : null;
+  const [allowed, setAllowed] = useState(() => allowedMask(task?.allowedDays));
   const initialFreq = splitFrequency(task?.frequencyDays ?? 7);
   const [freqCount, setFreqCount] = useState(initialFreq.count);
   const [freqUnit, setFreqUnit] = useState<FreqUnit>(initialFreq.unit);
@@ -154,7 +155,7 @@ export default function TaskFormFields({
           </div>
         </div>
       </div>
-      <DirtSlider key={frequencyDays} lastDoneAt={task?.lastDoneAt} frequencyDays={frequencyDays} />
+      <DirtSlider key={frequencyDays} lastDoneAt={task?.lastDoneAt} frequencyDays={frequencyDays} asOf={dirtAsOf} />
       <label className="flex items-start gap-2.5 text-sm cursor-pointer">
         <input type="checkbox" name="addonOn" checked={addonOn} onChange={(e) => setAddonOn(e.target.checked)} className="mt-0.5" />
         <span>
@@ -216,6 +217,7 @@ export default function TaskFormFields({
             key={addonFrequencyDays}
             lastDoneAt={task?.addonLastDoneAt ?? task?.lastDoneAt ?? null}
             frequencyDays={addonFrequencyDays}
+            asOf={dirtAsOf}
             name="addonDirtRatio"
             inputId="addon-dirt-ratio"
             label={`How long since ${addonName.trim() || "the add-on"}?`}
@@ -227,30 +229,28 @@ export default function TaskFormFields({
           Allowed days <span style={{ color: "var(--text3)" }}>(blank = any day)</span>
         </label>
         <div className="flex gap-1.5 flex-wrap">
-          {DAY_LABELS.map((label, i) => {
-            const defaultChecked = activeDays ? activeDays.includes(i) : true;
+          {DAY_SHORT.map((label, i) => {
+            const on = allowed[i];
             return (
               <label key={i} className="flex flex-col items-center gap-1 cursor-pointer">
-                <input type="checkbox" name="day" value={i} defaultChecked={defaultChecked} className="sr-only peer" />
+                <input
+                  type="checkbox"
+                  name="day"
+                  value={i}
+                  checked={on}
+                  onChange={() => setAllowed((prev) => {
+                    const next = [...prev];
+                    next[i] = !next[i];
+                    return next;
+                  })}
+                  className="sr-only"
+                />
                 <span
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium transition-all peer-checked:text-white"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium transition-all"
                   style={{
-                    background: "var(--surface2)",
-                    border: "1px solid var(--border)",
-                  }}
-                  onClick={(e) => {
-                    const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
-                    input.checked = !input.checked;
-                    const span = e.currentTarget;
-                    if (input.checked) {
-                      span.style.background = "var(--accent)";
-                      span.style.color = "white";
-                      span.style.borderColor = "var(--accent)";
-                    } else {
-                      span.style.background = "var(--surface2)";
-                      span.style.color = "";
-                      span.style.borderColor = "var(--border)";
-                    }
+                    background: on ? "var(--accent)" : "var(--surface2)",
+                    color: on ? "white" : undefined,
+                    border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
                   }}
                 >
                   {label}

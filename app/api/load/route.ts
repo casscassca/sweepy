@@ -15,7 +15,15 @@ export async function GET() {
       },
     }),
     prisma.user.findMany({
-      select: { dailyCapacity: true, dailyTaskLimit: true },
+      select: {
+        dailyCapacity: true,
+        dailyTaskLimit: true,
+        weekdayCapacities: true,
+        weekdayTaskLimits: true,
+        weekendShare: true,
+        weekendCapacity: true,
+        weekendTaskLimit: true,
+      },
     }),
   ]);
 

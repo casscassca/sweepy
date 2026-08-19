@@ -9,14 +9,16 @@ export default function DirtSlider({
   name = "dirtRatio",
   inputId = "dirt-ratio",
   label = "How dirty is it?",
+  asOf,
 }: {
   lastDoneAt?: string | null;
   frequencyDays?: number;
   name?: string;
   inputId?: string;
   label?: string;
+  asOf?: Date;
 }) {
-  const [ratio, setRatio] = useState(() => dirtinessRatio(lastDoneAt ?? null, frequencyDays ?? 7));
+  const [ratio, setRatio] = useState(() => dirtinessRatio(lastDoneAt ?? null, frequencyDays ?? 7, asOf));
   const color = dirtColor(ratio);
 
   return (

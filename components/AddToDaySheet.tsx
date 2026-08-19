@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { Check, Plus, Search } from "lucide-react";
+import { readJson } from "@/lib/read-json";
 
 type User = { id: string; name: string; color: string };
 type CatalogTask = { id: string; name: string; difficulty: number };
@@ -40,11 +41,11 @@ export default function AddToDaySheet({
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/rooms").then((r) => r.json()),
-      fetch(`/api/assignments?date=${date}&peek=1`).then((r) => r.json()),
+      fetch("/api/rooms").then((res) => readJson<Room[]>(res, [])),
+      fetch(`/api/assignments?date=${date}&peek=1`).then((res) => readJson<{ task: { id: string } }[]>(res, [])),
     ]).then(([r, a]) => {
       setRooms(Array.isArray(r) ? r : []);
-      setOnDay(new Set((Array.isArray(a) ? a : []).map((x: { task: { id: string } }) => x.task.id)));
+      setOnDay(new Set((Array.isArray(a) ? a : []).map((x) => x.task.id)));
     });
   }, [date]);
 

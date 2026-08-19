@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { addonFields } from "@/lib/addon";
+import { normalizeAllowedDays } from "@/lib/allowed-days";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
@@ -12,7 +13,7 @@ export async function POST(req: Request) {
       roomId,
       difficulty: Number(difficulty),
       frequencyDays: Number(frequencyDays),
-      allowedDays: allowedDays ?? null,
+      allowedDays: normalizeAllowedDays(allowedDays),
       lastDoneAt: lastDoneAt ? new Date(lastDoneAt) : null,
       important: Boolean(important),
       dueOnly: Boolean(dueOnly),

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { addonFields } from "@/lib/addon";
+import { normalizeAllowedDays } from "@/lib/allowed-days";
 import { prisma } from "@/lib/prisma";
 import { dropCleanUnheldAssignments } from "@/lib/scheduler";
 
@@ -27,7 +28,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(roomId !== undefined && { roomId }),
       ...(difficulty !== undefined && { difficulty: Number(difficulty) }),
       ...(frequencyDays !== undefined && { frequencyDays: Number(frequencyDays) }),
-      ...("allowedDays" in { allowedDays } && { allowedDays: allowedDays ?? null }),
+      ...(allowedDays !== undefined && { allowedDays: normalizeAllowedDays(allowedDays) }),
       ...(lastDoneAt !== undefined && { lastDoneAt: lastDoneAt ? new Date(lastDoneAt) : null }),
       ...(important !== undefined && { important: Boolean(important) }),
       ...(dueOnly !== undefined && { dueOnly: Boolean(dueOnly) }),

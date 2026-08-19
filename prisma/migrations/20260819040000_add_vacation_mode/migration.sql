@@ -1,0 +1,14 @@
+-- AlterTable
+ALTER TABLE "DailyAssignment" ADD COLUMN "parked" BOOLEAN NOT NULL DEFAULT false;
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "vacationOn" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "User" ADD COLUMN "vacationStart" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "User" ADD COLUMN "vacationEnd" TEXT NOT NULL DEFAULT '';
+
+-- AlterTable
+ALTER TABLE "Settings" ADD COLUMN "houseVacation" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Settings" ADD COLUMN "houseVacationStart" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Settings" ADD COLUMN "houseVacationEnd" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Settings" ADD COLUMN "pauseDirtiness" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Settings" ADD COLUMN "dirtFrozenOn" TEXT NOT NULL DEFAULT '';

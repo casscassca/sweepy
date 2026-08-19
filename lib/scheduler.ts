@@ -4,27 +4,36 @@ import { appendIntegrationLog } from "./integration-log";
 import { displayTaskDifficulty, displayTaskName, isTaskEligible } from "./addon";
 import { dirtinessRatio, dueDayStr } from "./dirtiness";
 import { calendarDayStr } from "./dates";
-import { addDays, format, getDay, parseISO } from "date-fns";
+import {
+  isWeekendDate,
+  overflowNextDate,
+  personCapOnDate,
+  personWeekendOn,
+  weekendPair,
+} from "./capacity";
+import { personAway, returnDay } from "./vacation";
+import { applyDirtPause, loadVacationContext } from "./vacation-db";
+import { isAllowedOnDate, nextAllowedOnOrAfter } from "./allowed-days";
+import { addDays, format, parseISO } from "date-fns";
 
 function todayStr() {
   return calendarDayStr(new Date());
 }
 
-// allowedDays is a comma-separated string of day numbers (0=Sun … 6=Sat), or null = any day
-function isAllowedOnDate(allowedDays: string | null, date: Date): boolean {
-  if (!allowedDays) return true;
-  const allowed = allowedDays.split(",").map(Number);
-  return allowed.includes(getDay(date));
-}
-
-function nextAllowedOnOrAfter(allowedDays: string | null, from: string, until: string): string | null {
-  let day = parseISO(`${from}T12:00:00`);
-  const end = parseISO(`${until}T12:00:00`);
-  while (day <= end) {
-    if (isAllowedOnDate(allowedDays, day)) return format(day, "yyyy-MM-dd");
-    day = addDays(day, 1);
+async function relocateOpen(
+  id: string,
+  taskId: string,
+  date: string,
+  extra: { parked?: boolean; held?: boolean } = {},
+) {
+  const clash = await prisma.dailyAssignment.findUnique({
+    where: { date_taskId: { date, taskId } },
+  });
+  if (clash && clash.id !== id) {
+    await prisma.dailyAssignment.delete({ where: { id } });
+    return;
   }
-  return null;
+  await prisma.dailyAssignment.update({ where: { id }, data: { date, ...extra } });
 }
 
 function dueOnlyTargetDate(
@@ -61,11 +70,16 @@ export async function dedupeOpenAssignments() {
 /** Auto-scheduled rows that are still too clean come off the list. Held ones stay. */
 export async function dropCleanUnheldAssignments() {
   const open = await prisma.dailyAssignment.findMany({
-    where: { completedAt: null, held: false },
+    where: { completedAt: null, held: false, parked: false },
     include: { task: { select: { lastDoneAt: true, frequencyDays: true, oneOff: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true } } },
   });
+  const { house, dirtAsOf } = await loadVacationContext(todayStr());
   const drop = open
-    .filter((a) => !a.task.oneOff && !isTaskEligible(a.task, new Date(`${a.date}T12:00:00`)))
+    .filter((a) => {
+      if (a.task.oneOff) return false;
+      const asOf = house.pauseDirtiness && house.dirtFrozenOn ? dirtAsOf : new Date(`${a.date}T12:00:00`);
+      return !isTaskEligible(a.task, asOf);
+    })
     .map((a) => a.id);
   if (drop.length > 0) {
     await prisma.dailyAssignment.deleteMany({ where: { id: { in: drop } } });
@@ -73,17 +87,18 @@ export async function dropCleanUnheldAssignments() {
   return drop.length;
 }
 
-/** Unfinished chores from earlier days roll to today instead of vanishing or stacking in the past. */
+/** Unfinished chores from earlier days roll to the next day they are allowed on. */
 export async function rollForwardPastAssignments(today = todayStr()) {
+  const { awayIds } = await loadVacationContext(today);
   const past = await prisma.dailyAssignment.findMany({
-    where: { completedAt: null, date: { lt: today } },
+    where: { completedAt: null, parked: false, date: { lt: today } },
+    include: { task: { select: { allowedDays: true } } },
   });
   for (const a of past) {
-    const clash = await prisma.dailyAssignment.findUnique({
-      where: { date_taskId: { date: today, taskId: a.taskId } },
-    });
-    if (clash) await prisma.dailyAssignment.delete({ where: { id: a.id } });
-    else await prisma.dailyAssignment.update({ where: { id: a.id }, data: { date: today } });
+    if (awayIds.has(a.userId)) continue;
+    const target = nextAllowedOnOrAfter(a.task.allowedDays, today);
+    if (!target) continue;
+    await relocateOpen(a.id, a.taskId, target);
   }
   return past.length;
 }
@@ -96,6 +111,46 @@ function staysOnItsDay(a: { pinned: boolean; held: boolean; task: { oneOff: bool
   return isManualStay(a) || !!a.task.dueOnly;
 }
 
+const TASK_LOAD_SELECT = {
+  difficulty: true,
+  lastDoneAt: true,
+  frequencyDays: true,
+  oneOff: true,
+  important: true,
+  dueOnly: true,
+  allowedDays: true,
+  addonName: true,
+  addonFrequencyDays: true,
+  addonPoints: true,
+  addonLastDoneAt: true,
+} as const;
+
+async function catalogUseOn(date: string, userId: string) {
+  const rows = await prisma.dailyAssignment.findMany({
+    where: { date, userId, parked: false, task: { oneOff: false } },
+    include: { task: { select: TASK_LOAD_SELECT } },
+  });
+  const asOf = new Date(`${date}T12:00:00`);
+  return {
+    pts: rows.reduce((s, a) => s + displayTaskDifficulty(a.task, asOf), 0),
+    tasks: rows.length,
+  };
+}
+
+async function weekendRemaining(
+  date: string,
+  userId: string,
+  pot: { weekendCapacity: number; weekendTaskLimit: number },
+) {
+  const pair = weekendPair(date);
+  if (!pair) return { pts: 0, tasks: 0 };
+  const [sat, sun] = await Promise.all([catalogUseOn(pair.sat, userId), catalogUseOn(pair.sun, userId)]);
+  return {
+    pts: pot.weekendCapacity - sat.pts - sun.pts,
+    tasks: pot.weekendTaskLimit - sat.tasks - sun.tasks,
+  };
+}
+
 /**
  * Auto-picks that overflow a person's daily points or task count slide forward.
  * Regular chores go first (cleanest first). Important autos only slide if
@@ -104,17 +159,29 @@ function staysOnItsDay(a: { pinned: boolean; held: boolean; task: { oneOff: bool
  * go over capacity on purpose.
  */
 export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
-  const users = await prisma.user.findMany({ select: { id: true, dailyCapacity: true, dailyTaskLimit: true } });
-  const cap = new Map(users.map((u) => [u.id, u.dailyCapacity]));
-  const taskCap = new Map(users.map((u) => [u.id, u.dailyTaskLimit]));
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      dailyCapacity: true,
+      dailyTaskLimit: true,
+      weekdayCapacities: true,
+      weekdayTaskLimits: true,
+      weekendShare: true,
+      weekendCapacity: true,
+      weekendTaskLimit: true,
+      vacationOn: true,
+      vacationStart: true,
+      vacationEnd: true,
+    },
+  });
+  const vac = await loadVacationContext(fromDate);
   const start = parseISO(`${fromDate}T12:00:00`);
 
   for (let i = 0; i < horizon; i++) {
     const date = format(addDays(start, i), "yyyy-MM-dd");
-    const next = format(addDays(start, i + 1), "yyyy-MM-dd");
     const open = await prisma.dailyAssignment.findMany({
-      where: { date, completedAt: null },
-      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, oneOff: true, important: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true } } },
+      where: { date, completedAt: null, parked: false },
+      include: { task: { select: TASK_LOAD_SELECT } },
     });
 
     const byUser = new Map<string, typeof open>();
@@ -125,25 +192,37 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
     }
 
     for (const [userId, items] of byUser) {
-      const limit = cap.get(userId) ?? 6;
-      const maxTasks = taskCap.get(userId) ?? 6;
+      const person = users.find((u) => u.id === userId);
+      if (person && personAway(person, vac.house, date)) continue;
       const autos = items.filter((a) => !staysOnItsDay(a));
-      const ranked = [...autos].sort((a, b) => {
-        if (a.task.important !== b.task.important) return a.task.important ? 1 : -1;
-        return dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays) -
-          dirtinessRatio(b.task.lastDoneAt, b.task.frequencyDays);
-      });
-      const asOf = new Date(`${date}T12:00:00`);
+      const asOf = vac.dirtAsOf;
       let points = autos.reduce((s, a) => s + displayTaskDifficulty(a.task, asOf), 0);
       let count = autos.length;
+      let limit = 6;
+      let maxTasks = 6;
+      if (person && personWeekendOn(person) && isWeekendDate(date)) {
+        const rem = await weekendRemaining(date, userId, person);
+        limit = rem.pts + points;
+        maxTasks = rem.tasks + count;
+      } else {
+        const dayCap = person ? personCapOnDate(person, date) : { pts: 6, tasks: 6 };
+        limit = dayCap.pts;
+        maxTasks = dayCap.tasks;
+      }
+      const ranked = [...autos].sort((a, b) => {
+        if (a.task.important !== b.task.important) return a.task.important ? 1 : -1;
+        return dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays, vac.dirtAsOf) -
+          dirtinessRatio(b.task.lastDoneAt, b.task.frequencyDays, vac.dirtAsOf);
+      });
       let idx = 0;
       while ((points > limit || count > maxTasks) && idx < ranked.length) {
         const spill = ranked[idx++];
-        const clash = await prisma.dailyAssignment.findUnique({
-          where: { date_taskId: { date: next, taskId: spill.taskId } },
-        });
-        if (clash) await prisma.dailyAssignment.delete({ where: { id: spill.id } });
-        else await prisma.dailyAssignment.update({ where: { id: spill.id }, data: { date: next } });
+        const dest = nextAllowedOnOrAfter(
+          spill.task.allowedDays,
+          overflowNextDate(date, person ? personWeekendOn(person) : false),
+        );
+        if (!dest || dest === date) continue;
+        await relocateOpen(spill.id, spill.taskId, dest);
         points -= displayTaskDifficulty(spill.task, asOf);
         count -= 1;
       }
@@ -165,6 +244,7 @@ export async function reshuffleFrom(
       date: { in: days },
       completedAt: null,
       pinned: false,
+      parked: false,
       ...(opts?.keepHeld ? { held: false } : {}),
       task: { oneOff: false },
     },
@@ -180,19 +260,66 @@ export async function reshuffleFrom(
 }
 
 export async function prepareAssignments(notBefore = todayStr()) {
+  await applyDirtPause(notBefore);
+  await applyVacation(notBefore);
   const duplicates = await dedupeOpenAssignments();
   const rolled = await rollForwardPastAssignments(notBefore);
   const dropped = await dropCleanUnheldAssignments();
   await snapDueOnlyToDueDay(notBefore);
   await enforceCapacity(notBefore);
+  await snapToAllowedDays(notBefore);
+  await applyVacation(notBefore);
   return { duplicates, rolled, dropped };
+}
+
+async function applyVacation(day: string) {
+  const { house, users, awayIds } = await loadVacationContext(day);
+  const open = await prisma.dailyAssignment.findMany({
+    where: { completedAt: null },
+    include: { task: { select: { oneOff: true, allowedDays: true } } },
+  });
+  const dismiss: string[] = [];
+  for (const a of open) {
+    const person = users.find((u) => u.id === a.userId);
+    if (!person) continue;
+    const awayToday = awayIds.has(a.userId);
+    const awayOnDate = personAway(person, house, a.date);
+
+    if (a.parked) {
+      if (!awayToday) {
+        const landing = nextAllowedOnOrAfter(a.task.allowedDays, day) ?? day;
+        await relocateOpen(a.id, a.taskId, landing, { parked: false, held: true });
+      }
+      continue;
+    }
+
+    const stay = a.pinned || a.held || a.task.oneOff;
+    if (!stay && awayOnDate) {
+      await prisma.dailyAssignment.delete({ where: { id: a.id } });
+      dismiss.push(a.id);
+      continue;
+    }
+    if (!awayToday || a.date > day || !stay) continue;
+    const back = returnDay(person, house, day);
+    if (back && back > day) {
+      const landing = nextAllowedOnOrAfter(a.task.allowedDays, back) ?? back;
+      await relocateOpen(a.id, a.taskId, landing, { held: true, parked: false });
+    } else {
+      await prisma.dailyAssignment.update({
+        where: { id: a.id },
+        data: { parked: true, held: true },
+      });
+    }
+    dismiss.push(a.id);
+  }
+  for (const id of dismiss) await dismissAssignmentNotify(id);
 }
 
 /** Move unheld due-only chores onto the day the interval is actually up. */
 async function snapDueOnlyToDueDay(fromDate = todayStr(), horizon = 21) {
   const until = format(addDays(parseISO(`${fromDate}T12:00:00`), horizon - 1), "yyyy-MM-dd");
   const open = await prisma.dailyAssignment.findMany({
-    where: { completedAt: null, pinned: false, held: false, task: { dueOnly: true, oneOff: false } },
+    where: { completedAt: null, pinned: false, held: false, parked: false, task: { dueOnly: true, oneOff: false } },
     include: { task: { select: { lastDoneAt: true, frequencyDays: true, allowedDays: true } } },
   });
   for (const a of open) {
@@ -206,19 +333,37 @@ async function snapDueOnlyToDueDay(fromDate = todayStr(), horizon = 21) {
   }
 }
 
+async function snapToAllowedDays(fromDate = todayStr()) {
+  const open = await prisma.dailyAssignment.findMany({
+    where: { completedAt: null, parked: false, pinned: false, held: false, task: { oneOff: false } },
+    include: { task: { select: { allowedDays: true } } },
+  });
+  for (const a of open) {
+    if (isAllowedOnDate(a.task.allowedDays, a.date)) continue;
+    const from = a.date < fromDate ? fromDate : a.date;
+    const target = nextAllowedOnOrAfter(a.task.allowedDays, from);
+    if (!target || target === a.date) continue;
+    await relocateOpen(a.id, a.taskId, target);
+  }
+}
+
 /** After a reshuffle wipe, seat due-only chores on their due day before filler runs. */
 async function placeDueOnlyOnDueDays(fromDate: string, horizon: number) {
   const until = format(addDays(parseISO(`${fromDate}T12:00:00`), horizon - 1), "yyyy-MM-dd");
-  const [tasks, users, open] = await Promise.all([
+  const [tasks, users, open, vac] = await Promise.all([
     prisma.task.findMany({
       where: { dueOnly: true, oneOff: false },
       include: { assignableUsers: true },
     }),
-    prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true } }),
+    prisma.user.findMany({
+      orderBy: { createdAt: "asc" },
+      select: { id: true, vacationOn: true, vacationStart: true, vacationEnd: true },
+    }),
     prisma.dailyAssignment.findMany({
       where: { completedAt: null },
       select: { taskId: true, date: true, userId: true, order: true },
     }),
+    loadVacationContext(fromDate),
   ]);
 
   const taken = new Set(open.map((a) => a.taskId));
@@ -236,9 +381,13 @@ async function placeDueOnlyOnDueDays(fromDate: string, horizon: number) {
     const date = dueOnlyTargetDate(task.lastDoneAt, task.frequencyDays, task.allowedDays, fromDate, until);
     if (!date) continue;
 
-    const allowed = task.assignableUsers.length > 0
+    const allowed = (task.assignableUsers.length > 0
       ? task.assignableUsers.map((au) => au.userId)
-      : users.map((u) => u.id);
+      : users.map((u) => u.id)
+    ).filter((uid) => {
+      const person = users.find((u) => u.id === uid);
+      return person && !personAway(person, vac.house, date);
+    });
     if (allowed.length === 0) continue;
 
     let bestUser = allowed[0];
@@ -265,12 +414,18 @@ async function placeDueOnlyOnDueDays(fromDate: string, horizon: number) {
   return toCreate.length;
 }
 
-export async function holdAssignmentOnDate(id: string, date: string) {
-  const current = await prisma.dailyAssignment.findUnique({ where: { id } });
+export async function holdAssignmentOnDate(id: string, date: string, opts?: { respectAllowed?: boolean }) {
+  const current = await prisma.dailyAssignment.findUnique({
+    where: { id },
+    include: { task: { select: { allowedDays: true } } },
+  });
   if (!current) return null;
-  if (current.date !== date) {
+  const landing = opts?.respectAllowed === false
+    ? date
+    : (nextAllowedOnOrAfter(current.task.allowedDays, date) ?? date);
+  if (current.date !== landing) {
     const clash = await prisma.dailyAssignment.findUnique({
-      where: { date_taskId: { date, taskId: current.taskId } },
+      where: { date_taskId: { date: landing, taskId: current.taskId } },
     });
     if (clash) {
       await prisma.dailyAssignment.delete({ where: { id } });
@@ -283,7 +438,7 @@ export async function holdAssignmentOnDate(id: string, date: string) {
   }
   const assignment = await prisma.dailyAssignment.update({
     where: { id },
-    data: { date, held: true, remindAt: null },
+    data: { date: landing, held: true, remindAt: null },
   });
   return assignment;
 }
@@ -295,17 +450,18 @@ export async function addTaskToDate(taskId: string, date: string, preferredUserI
   });
   if (!task) return { ok: false as const, status: 404, reason: "task not found" };
   if (task.oneOff) return { ok: false as const, status: 400, reason: "one-off" };
+  const landing = nextAllowedOnOrAfter(task.allowedDays, date) ?? date;
 
   const open = await prisma.dailyAssignment.findFirst({
     where: { taskId, completedAt: null },
   });
   if (open) {
-    const moved = await holdAssignmentOnDate(open.id, date);
-    return { ok: true as const, already: open.date === date, assignment: moved };
+    const moved = await holdAssignmentOnDate(open.id, landing);
+    return { ok: true as const, already: open.date === landing, assignment: moved };
   }
 
   const existingToday = await prisma.dailyAssignment.findUnique({
-    where: { date_taskId: { date, taskId } },
+    where: { date_taskId: { date: landing, taskId } },
   });
   if (existingToday) return { ok: true as const, already: true, assignment: existingToday };
 
@@ -317,12 +473,12 @@ export async function addTaskToDate(taskId: string, date: string, preferredUserI
   if (!userId) return { ok: false as const, status: 422, reason: "no people to assign to" };
 
   const last = await prisma.dailyAssignment.findFirst({
-    where: { date, userId },
+    where: { date: landing, userId },
     orderBy: { order: "desc" },
     select: { order: true },
   });
   const created = await prisma.dailyAssignment.create({
-    data: { date, taskId, userId, order: (last?.order ?? -1) + 1, held: true },
+    data: { date: landing, taskId, userId, order: (last?.order ?? -1) + 1, held: true },
   });
   return { ok: true as const, already: false, assignment: created };
 }
@@ -367,6 +523,8 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
   const date = dateStr ?? householdToday;
   const targetDate = new Date(date + "T12:00:00"); // noon to avoid DST edge cases
   await prepareAssignments(householdToday);
+  const vac = await loadVacationContext(date);
+  const dirtAsOf = vac.dirtAsOf;
 
   const [tasks, users, existing, openElsewhere] = await Promise.all([
     prisma.task.findMany({
@@ -375,8 +533,8 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
     }),
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.dailyAssignment.findMany({
-      where: { date },
-      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true } } },
+      where: { date, parked: false },
+      include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, oneOff: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true } } },
     }),
     prisma.dailyAssignment.findMany({
       where: { completedAt: null, date: { not: date } },
@@ -389,14 +547,14 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
 
   const eligible = tasks
     .filter((t) => !alreadyAssignedIds.has(t.id) && !blockedIds.has(t.id))
-    .filter((t) => isAllowedOnDate(t.allowedDays, targetDate))
+    .filter((t) => isAllowedOnDate(t.allowedDays, date))
     .map((t) => ({
       task: t,
-      dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, targetDate),
+      dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, dirtAsOf),
       exclusive: t.assignableUsers.length === 1,
       important: t.important,
     }))
-    .filter(({ task }) => isTaskEligible(task, targetDate))
+    .filter(({ task }) => isTaskEligible(task, dirtAsOf))
     .sort((a, b) => {
       if (a.important !== b.important) return a.important ? -1 : 1;
       if (a.exclusive !== b.exclusive) return a.exclusive ? -1 : 1;
@@ -405,12 +563,31 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
 
   if (eligible.length === 0) return { assigned: 0 };
 
-  const capacityLeft = new Map<string, number>(users.map((u) => [u.id, u.dailyCapacity]));
-  const slotsLeft = new Map<string, number>(users.map((u) => [u.id, u.dailyTaskLimit]));
+  const capacityLeft = new Map<string, number>();
+  const slotsLeft = new Map<string, number>();
+  for (const user of users) {
+    if (personAway(user, vac.house, date)) {
+      capacityLeft.set(user.id, 0);
+      slotsLeft.set(user.id, 0);
+      continue;
+    }
+    if (personWeekendOn(user) && isWeekendDate(date)) {
+      const rem = await weekendRemaining(date, user.id, user);
+      capacityLeft.set(user.id, rem.pts);
+      slotsLeft.set(user.id, rem.tasks);
+    } else {
+      const cap = personCapOnDate(user, date);
+      capacityLeft.set(user.id, cap.pts);
+      slotsLeft.set(user.id, cap.tasks);
+    }
+  }
   const orderCounters = new Map<string, number>(users.map((u) => [u.id, 0]));
   for (const a of existing) {
-    capacityLeft.set(a.userId, (capacityLeft.get(a.userId) ?? 0) - displayTaskDifficulty(a.task, targetDate));
-    slotsLeft.set(a.userId, (slotsLeft.get(a.userId) ?? 0) - 1);
+    const owner = users.find((u) => u.id === a.userId);
+    if (!(owner && personWeekendOn(owner) && isWeekendDate(date))) {
+      capacityLeft.set(a.userId, (capacityLeft.get(a.userId) ?? 0) - displayTaskDifficulty(a.task, targetDate));
+      slotsLeft.set(a.userId, (slotsLeft.get(a.userId) ?? 0) - 1);
+    }
     orderCounters.set(a.userId, (orderCounters.get(a.userId) ?? 0) + 1);
   }
 
@@ -421,13 +598,15 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
       task.assignableUsers.length > 0
         ? task.assignableUsers.map((au: { userId: string }) => au.userId)
         : users.map((u) => u.id);
+    const difficulty = displayTaskDifficulty(task, targetDate);
 
     let bestUser: string | null = null;
     let bestCapacity = allowOver ? Number.NEGATIVE_INFINITY : -1;
     for (const uid of assignableUserIds) {
+      if (vac.awayIds.has(uid)) continue;
       const cap = capacityLeft.get(uid) ?? 0;
       const slots = slotsLeft.get(uid) ?? 0;
-      if (!allowOver && (slots < 1 || cap < displayTaskDifficulty(task, targetDate))) continue;
+      if (!allowOver && (slots < 1 || cap < difficulty)) continue;
       if (cap > bestCapacity) {
         bestCapacity = cap;
         bestUser = uid;
@@ -440,8 +619,8 @@ export async function runDailyAssignment(dateStr?: string, householdToday = toda
     for (const { task } of items) {
       const bestUser = pickUser(task, allowOver);
       if (!bestUser) continue;
-
-      capacityLeft.set(bestUser, (capacityLeft.get(bestUser) ?? 0) - displayTaskDifficulty(task, targetDate));
+      const difficulty = displayTaskDifficulty(task, targetDate);
+      capacityLeft.set(bestUser, (capacityLeft.get(bestUser) ?? 0) - difficulty);
       slotsLeft.set(bestUser, (slotsLeft.get(bestUser) ?? 0) - 1);
       const order = orderCounters.get(bestUser) ?? 0;
       orderCounters.set(bestUser, order + 1);
@@ -542,14 +721,29 @@ export async function sendNotificationsForUser(
   opts?: { replace?: boolean },
 ) {
   const replace = opts?.replace === true;
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { ok: false as const, reason: "person not found", sent: 0, cleared: 0, attempts: [] as NotifyAttempt[] };
+  const vac = await loadVacationContext(date);
+  if (personAway(user, vac.house, date)) {
+    if (replace) {
+      const haSkip = haConfig();
+      if (haSkip && user.haNotifyTarget) {
+        const catalog = await listHaNotifyCatalog(haSkip);
+        const resolved = catalog.reachable ? resolveNotifyTarget(user.haNotifyTarget, catalog) : null;
+        if (resolved?.ok) {
+          await clearPhoneNotifications(haSkip, resolved.service, parseNotifyTags(user.notifyTags));
+        }
+      }
+      await prisma.user.update({ where: { id: user.id }, data: { notifyTags: "" } });
+    }
+    return { ok: true as const, sent: 0, cleared: 0, reason: `${user.name} is away`, attempts: [] as NotifyAttempt[] };
+  }
+
   const ha = haConfig();
   if (!ha) {
     await logNotify({ ok: false, userName: "", summary: "HA_URL or HA_TOKEN is not set" });
     return { ok: false as const, reason: "HA_URL or HA_TOKEN is not set", sent: 0, cleared: 0, attempts: [] as NotifyAttempt[] };
   }
-
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return { ok: false as const, reason: "person not found", sent: 0, cleared: 0, attempts: [] as NotifyAttempt[] };
   if (!user.haNotifyTarget) {
     await logNotify({ ok: false, userName: user.name, summary: `${user.name} has no HA notify target` });
     return { ok: false as const, reason: `${user.name} has no HA notify target`, sent: 0, cleared: 0, attempts: [] as NotifyAttempt[] };
@@ -578,6 +772,7 @@ export async function sendNotificationsForUser(
     where: {
       userId: user.id,
       completedAt: null,
+      parked: false,
       ...(onlyIds ? { id: { in: onlyIds } } : {
         date,
         OR: [{ remindAt: null }, { remindAt: { lte: new Date() } }],
@@ -703,19 +898,42 @@ export async function fillUserTodayAndNotify(userId: string) {
   const date = todayStr();
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, dailyCapacity: true, dailyTaskLimit: true },
+    select: {
+      id: true,
+      dailyCapacity: true,
+      dailyTaskLimit: true,
+      weekdayCapacities: true,
+      weekdayTaskLimits: true,
+      weekendShare: true,
+      weekendCapacity: true,
+      weekendTaskLimit: true,
+      vacationOn: true,
+      vacationStart: true,
+      vacationEnd: true,
+    },
   });
   if (!user) return 0;
+  const vac = await loadVacationContext(date);
+  if (personAway(user, vac.house, date)) return 0;
 
   const open = await prisma.dailyAssignment.findMany({
-    where: { userId, date, completedAt: null },
+    where: { userId, date, completedAt: null, parked: false },
     include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true } } },
   });
   const asOf = new Date(`${date}T12:00:00`);
   const points = open.reduce((s, a) => s + displayTaskDifficulty(a.task, asOf), 0);
-  if (open.length >= user.dailyTaskLimit || points >= user.dailyCapacity) return 0;
+  let pointsLeft = 0;
+  if (personWeekendOn(user) && isWeekendDate(date)) {
+    const rem = await weekendRemaining(date, user.id, user);
+    if (rem.tasks < 1 || rem.pts < 1) return 0;
+    pointsLeft = rem.pts;
+  } else {
+    const cap = personCapOnDate(user, date);
+    if (open.length >= cap.tasks || points >= cap.pts) return 0;
+    pointsLeft = cap.pts - points;
+  }
 
-  const addedId = await assignNextForUser(user.id, date, user.dailyCapacity - points);
+  const addedId = await assignNextForUser(user.id, date, pointsLeft);
   if (!addedId) return 0;
   await sendNotificationsForUser(userId, date, [addedId]);
   return 1;
@@ -729,8 +947,7 @@ async function assignNextForUser(userId: string, date: string, pointsLeft: numbe
       include: { assignableUsers: true },
     }),
     prisma.dailyAssignment.findMany({
-      where: { date },
-      select: { taskId: true, userId: true, order: true },
+      where: { date, parked: false },
     }),
     prisma.dailyAssignment.findMany({
       where: { completedAt: null, date: { not: date } },
@@ -745,7 +962,7 @@ async function assignNextForUser(userId: string, date: string, pointsLeft: numbe
 
   const next = tasks
     .filter((t) => !taken.has(t.id) && !blocked.has(t.id))
-    .filter((t) => isAllowedOnDate(t.allowedDays, targetDate))
+    .filter((t) => isAllowedOnDate(t.allowedDays, date))
     .filter((t) => t.assignableUsers.length === 0 || t.assignableUsers.some((au) => au.userId === userId))
     .map((t) => ({
       task: t,
@@ -795,7 +1012,9 @@ export async function sendNotificationsForTime(timeStr: string) {
     return;
   }
 
+  const vac = await loadVacationContext(todayStr());
   for (const user of users) {
+    if (personAway(user, vac.house, todayStr())) continue;
     const result = await sendNotificationsForUser(user.id);
     console.log(`[notify] ${timeStr} ${user.name}: sent ${result.sent}${result.reason ? ` (${result.reason})` : ""}`);
   }

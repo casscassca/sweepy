@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { encodeWeek, parseWeek } from "@/lib/capacity";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, generateWebhookSecret } from "@/lib/auth";
+import { prepareAssignments } from "@/lib/scheduler";
+import { ymd } from "@/lib/vacation";
+import { calendarDayStr } from "@/lib/dates";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,8 +23,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const v = Math.round(Number(body.dailyTaskLimit));
     if (Number.isFinite(v)) data.dailyTaskLimit = Math.min(20, Math.max(1, v));
   }
+  if (typeof body.weekdayCapacities === "string") {
+    const fallback = typeof data.dailyCapacity === "number" ? data.dailyCapacity : 6;
+    data.weekdayCapacities = encodeWeek(parseWeek(body.weekdayCapacities, fallback));
+  }
+  if (typeof body.weekdayTaskLimits === "string") {
+    const fallback = typeof data.dailyTaskLimit === "number" ? data.dailyTaskLimit : 6;
+    data.weekdayTaskLimits = encodeWeek(parseWeek(body.weekdayTaskLimits, fallback));
+  }
+  if (typeof body.weekendShare === "boolean") data.weekendShare = body.weekendShare;
+  if (body.weekendCapacity !== undefined) {
+    const v = Math.round(Number(body.weekendCapacity));
+    if (Number.isFinite(v)) data.weekendCapacity = Math.min(20, Math.max(0, v));
+  }
+  if (body.weekendTaskLimit !== undefined) {
+    const v = Math.round(Number(body.weekendTaskLimit));
+    if (Number.isFinite(v)) data.weekendTaskLimit = Math.min(20, Math.max(0, v));
+  }
   if (typeof body.notifyTime === "string") data.notifyTime = body.notifyTime;
   if (typeof body.color === "string") data.color = body.color;
+  if (typeof body.vacationOn === "boolean") data.vacationOn = body.vacationOn;
+  if (body.vacationStart !== undefined) data.vacationStart = ymd(body.vacationStart);
+  if (body.vacationEnd !== undefined) data.vacationEnd = ymd(body.vacationEnd);
 
   // Set a password (hashed). Empty/whitespace is ignored.
   if (typeof body.password === "string" && body.password.trim().length > 0) {
@@ -36,6 +60,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data,
     omit: { passwordHash: false, webhookSecret: false },
   });
+  if (typeof body.vacationOn === "boolean" || body.vacationStart !== undefined || body.vacationEnd !== undefined) {
+    await prepareAssignments(calendarDayStr());
+  }
   const { passwordHash, ...rest } = user;
   return NextResponse.json({ ...rest, hasPassword: passwordHash != null });
 }
