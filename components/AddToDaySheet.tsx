@@ -34,9 +34,9 @@ export default function AddToDaySheet({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
-  const [oneOffName, setOneOffName] = useState("");
   const [oneOffUserId, setOneOffUserId] = useState(defaultUserId ?? users[0]?.id ?? "");
   const [oneOffDiff, setOneOffDiff] = useState(1);
+  const [composingOneOff, setComposingOneOff] = useState(false);
   const [savingOneOff, setSavingOneOff] = useState(false);
 
   useEffect(() => {
@@ -65,6 +65,17 @@ export default function AddToDaySheet({
       }))
       .filter((room) => room.tasks.length > 0);
   }, [rooms, query]);
+
+  const typedName = query.trim();
+  const exactMatch = typedName.length > 0 && rooms.some((room) =>
+    room.tasks.some((t) => t.name.toLowerCase() === typedName.toLowerCase()),
+  );
+  const canAddOneOff = typedName.length > 0 && !exactMatch;
+
+  function setSearch(value: string) {
+    setQuery(value);
+    setComposingOneOff(false);
+  }
 
   async function addCatalog(taskId: string) {
     if (onDay.has(taskId) || adding || addingId) return;
@@ -126,16 +137,15 @@ export default function AddToDaySheet({
     }
   }
 
-  async function addOneOff(e: React.FormEvent) {
-    e.preventDefault();
-    if (!oneOffName.trim() || !oneOffUserId || savingOneOff) return;
+  async function addOneOff() {
+    if (!typedName || !oneOffUserId || savingOneOff || !canAddOneOff) return;
     setSavingOneOff(true);
     const res = await fetch("/api/assignments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         oneOff: true,
-        name: oneOffName,
+        name: typedName,
         userId: oneOffUserId,
         difficulty: oneOffDiff,
         date,
@@ -163,17 +173,8 @@ export default function AddToDaySheet({
       >
         <h2 id="add-to-day-title" className="font-semibold text-lg mb-3">{title}</h2>
 
-        <form onSubmit={addOneOff} className="space-y-3 mb-5">
-          <p className="text-sm font-medium">One-off</p>
-          <input
-            autoFocus
-            value={oneOffName}
-            onChange={(e) => setOneOffName(e.target.value)}
-            className="w-full"
-            placeholder="e.g. Take out recycling"
-            required
-          />
-          <div>
+        {users.length > 0 && (
+          <div className="mb-3">
             <p className="text-xs mb-1.5" style={{ color: "var(--text3)" }}>Who</p>
             <div className="flex flex-wrap gap-2">
               {users.map((u) => (
@@ -194,146 +195,160 @@ export default function AddToDaySheet({
               ))}
             </div>
           </div>
-          <div>
-            <p className="text-xs mb-1.5" style={{ color: "var(--text3)" }}>Size</p>
-            <div className="flex gap-2">
-              {DIFF.map((d) => (
-                <button
-                  key={d.value}
-                  type="button"
-                  onClick={() => setOneOffDiff(d.value)}
-                  className="flex-1 px-3 py-1.5 rounded-xl text-sm font-medium"
-                  style={{
-                    background: oneOffDiff === d.value ? "var(--accent-dim)" : "var(--surface2)",
-                    color: oneOffDiff === d.value ? "var(--accent)" : "var(--text2)",
-                    border: `2px solid ${oneOffDiff === d.value ? "var(--accent)" : "transparent"}`,
-                  }}
-                >
-                  {d.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button
-              type="submit"
-              disabled={savingOneOff}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white"
-              style={{ background: "var(--accent)" }}
-            >
-              {savingOneOff ? "Adding…" : "Add one-off"}
-            </button>
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm" style={{ color: "var(--text3)" }}>
-              Cancel
-            </button>
-          </div>
-        </form>
+        )}
 
-        <div className="pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-          <p className="text-sm font-medium mb-3">Or pick chores</p>
-          <label className="relative block mb-3">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text3)" }} />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full"
-              style={{ paddingLeft: 36 }}
-              placeholder="Search chores…"
-              aria-label="Search chores"
-            />
-          </label>
+        <label className="relative block mb-3">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text3)" }} />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full"
+            style={{ paddingLeft: 36 }}
+            placeholder="Search or add"
+            aria-label="Search or add"
+          />
+        </label>
 
-          <div className="space-y-3">
-            {filtered.length === 0 && (
-              <p className="text-sm py-4 text-center" style={{ color: "var(--text3)" }}>
-                {query ? "No matching chores" : "No catalog chores yet"}
-              </p>
-            )}
-            {filtered.map((room) => {
-              const pickable = room.tasks.filter((t) => !onDay.has(t.id));
-              const allPicked = pickable.length > 0 && pickable.every((t) => selected.has(t.id));
-              return (
-              <div key={room.id}>
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <p className="text-xs font-medium" style={{ color: "var(--text3)" }}>
-                    {room.icon} {room.name}
-                  </p>
-                  {pickable.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => toggleRoom(room)}
-                      className="text-xs"
-                      style={{ color: "var(--text3)" }}
-                    >
-                      {allPicked ? "Clear" : "All"}
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  {room.tasks.map((task) => {
-                    const added = onDay.has(task.id);
-                    const busy = adding || addingId !== null;
-                    return (
-                      <div
-                        key={task.id}
-                        className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm"
+        {canAddOneOff && (
+          <div className="mb-4">
+            {composingOneOff ? (
+              <div className="space-y-3 p-3 rounded-xl" style={{ background: "var(--surface2)" }}>
+                <p className="text-sm font-medium">Add "{typedName}" as a one-off</p>
+                <div>
+                  <p className="text-xs mb-1.5" style={{ color: "var(--text3)" }}>Size</p>
+                  <div className="flex gap-2">
+                    {DIFF.map((d) => (
+                      <button
+                        key={d.value}
+                        type="button"
+                        onClick={() => setOneOffDiff(d.value)}
+                        className="flex-1 px-3 py-1.5 rounded-xl text-sm font-medium"
                         style={{
-                          background: "var(--surface2)",
-                          color: added ? "var(--text3)" : "var(--text)",
+                          background: oneOffDiff === d.value ? "var(--accent-dim)" : "var(--bg)",
+                          color: oneOffDiff === d.value ? "var(--accent)" : "var(--text2)",
+                          border: `2px solid ${oneOffDiff === d.value ? "var(--accent)" : "transparent"}`,
                         }}
                       >
-                        <input
-                          type="checkbox"
-                          checked={added || selected.has(task.id)}
-                          disabled={added || busy}
-                          onChange={() => toggle(task.id)}
-                          className="shrink-0"
-                          aria-label={`Select ${task.name}`}
-                        />
-                        <span className="flex-1 min-w-0 truncate">{task.name}</span>
-                        {added ? (
-                          <Check size={16} className="shrink-0" style={{ color: "var(--green)" }} />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => addCatalog(task.id)}
-                            disabled={busy}
-                            className="shrink-0 p-1 -mr-1 rounded-lg"
-                            aria-label={`Add ${task.name} now`}
-                          >
-                            <Plus size={16} style={{ color: "var(--text3)" }} />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={addOneOff}
+                  disabled={savingOneOff}
+                  className="px-4 py-2 rounded-xl text-sm font-medium text-white"
+                  style={{ background: "var(--accent)" }}
+                >
+                  {savingOneOff ? "Adding…" : "Add one-off"}
+                </button>
               </div>
-              );
-            })}
+            ) : (
+              <button
+                type="button"
+                onClick={() => setComposingOneOff(true)}
+                className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm text-left"
+                style={{ background: "var(--surface2)" }}
+              >
+                <Plus size={16} className="shrink-0" style={{ color: "var(--accent)" }} />
+                <span>Add a one-off</span>
+              </button>
+            )}
           </div>
-          {selected.size > 0 && (
-            <div className="sticky bottom-0 pt-3 mt-3 flex gap-2" style={{ background: "var(--surface)" }}>
-              <button
-                type="button"
-                onClick={addSelected}
-                disabled={adding}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-white"
-                style={{ background: "var(--accent)" }}
-              >
-                {adding ? "Adding…" : `Add ${selected.size} chore${selected.size === 1 ? "" : "s"}`}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelected(new Set())}
-                className="px-4 py-2.5 rounded-xl text-sm"
-                style={{ color: "var(--text3)" }}
-              >
-                Clear
-              </button>
-            </div>
+        )}
+
+        <div className="space-y-3">
+          {filtered.length === 0 && !canAddOneOff && (
+            <p className="text-sm py-4 text-center" style={{ color: "var(--text3)" }}>
+              {query ? "No matching chores" : "No catalog chores yet"}
+            </p>
           )}
+          {filtered.map((room) => {
+            const pickable = room.tasks.filter((t) => !onDay.has(t.id));
+            const allPicked = pickable.length > 0 && pickable.every((t) => selected.has(t.id));
+            return (
+            <div key={room.id}>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <p className="text-xs font-medium" style={{ color: "var(--text3)" }}>
+                  {room.icon} {room.name}
+                </p>
+                {pickable.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => toggleRoom(room)}
+                    className="text-xs"
+                    style={{ color: "var(--text3)" }}
+                  >
+                    {allPicked ? "Clear" : "All"}
+                  </button>
+                )}
+              </div>
+              <div className="space-y-1">
+                {room.tasks.map((task) => {
+                  const added = onDay.has(task.id);
+                  const busy = adding || addingId !== null;
+                  return (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm"
+                      style={{
+                        background: "var(--surface2)",
+                        color: added ? "var(--text3)" : "var(--text)",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={added || selected.has(task.id)}
+                        disabled={added || busy}
+                        onChange={() => toggle(task.id)}
+                        className="shrink-0"
+                        aria-label={`Select ${task.name}`}
+                      />
+                      <span className="flex-1 min-w-0 truncate">{task.name}</span>
+                      {added ? (
+                        <Check size={16} className="shrink-0" style={{ color: "var(--green)" }} />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => addCatalog(task.id)}
+                          disabled={busy}
+                          className="shrink-0 p-1 -mr-1 rounded-lg"
+                          aria-label={`Add ${task.name} now`}
+                        >
+                          <Plus size={16} style={{ color: "var(--text3)" }} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            );
+          })}
         </div>
+        {selected.size > 0 && (
+          <div className="sticky bottom-0 pt-3 mt-3 flex gap-2" style={{ background: "var(--surface)" }}>
+            <button
+              type="button"
+              onClick={addSelected}
+              disabled={adding}
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-white"
+              style={{ background: "var(--accent)" }}
+            >
+              {adding ? "Adding…" : `Add ${selected.size} chore${selected.size === 1 ? "" : "s"}`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="px-4 py-2.5 rounded-xl text-sm"
+              style={{ color: "var(--text3)" }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
