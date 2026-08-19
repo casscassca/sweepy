@@ -63,6 +63,6 @@ export function formatAllowedDays(raw: string | null | undefined): string {
 
 export function allowedMask(raw: string | null | undefined): boolean[] {
   const days = parseAllowedDays(raw);
-  if (!days) return [true, true, true, true, true, true, true];
+  if (!days) return [false, false, false, false, false, false, false];
   return [0, 1, 2, 3, 4, 5, 6].map((i) => days.includes(i));
 }
