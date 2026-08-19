@@ -45,10 +45,10 @@ export default function DirtSlider({
         aria-valuenow={ratio}
         aria-valuetext={ratio >= DIRT_MAX - 0.05 ? "Filthy" : ratio < 0.5 ? "Just cleaned" : `Due ${ratio.toFixed(1)}× over`}
       />
-      <div className="flex justify-between mt-1.5 text-xs" style={{ color: "var(--text3)" }}>
-        <span>Just cleaned</span>
-        <span>Due</span>
-        <span>Filthy</span>
+      <div className="relative mt-1.5 text-xs h-4" style={{ color: "var(--text3)" }}>
+        <span className="absolute left-0">Just cleaned</span>
+        <span className="absolute" style={{ left: `${(1 / DIRT_MAX) * 100}%`, transform: "translateX(-50%)" }}>Due</span>
+        <span className="absolute right-0">Filthy</span>
       </div>
     </div>
   );

@@ -392,8 +392,8 @@ export default function RoomsPage() {
               onClick={() => setExpanded((e) => ({ ...e, [room.id]: !e[room.id] }))}
             >
               <span className="text-xl w-7 shrink-0 text-center">{room.icon}</span>
-              <RoomDirtGauge tasks={room.tasks} />
-              <span className="font-medium flex-1 min-w-0 truncate">{room.name}</span>
+              <span className="font-medium min-w-0 max-w-[42%] truncate">{room.name}</span>
+              <RoomDirtGauge tasks={room.tasks} asOf={dirtAsOf} />
               <span className="text-xs w-14 shrink-0 text-right" style={{ color: "var(--text3)" }}>
                 {room.tasks.length} {room.tasks.length === 1 ? "task" : "tasks"}
               </span>

@@ -62,6 +62,13 @@ export function dirtColor(ratio: number, alpha = 0.7): string {
   return `rgba(${r}, ${g}, ${bl}, ${alpha})`;
 }
 
+export function cleanlinessPct(ratio: number): number {
+  const r = Math.min(DIRT_MAX, Math.max(0, ratio));
+  if (r <= 1) return 100 - r * 12;
+  if (r <= 2) return 88 - (r - 1) * 48;
+  return Math.max(8, 40 - (r - 2) * 32);
+}
+
 export function roomDirtiness(
   tasks: Array<{ lastDoneAt: Date | string | null; frequencyDays: number }>,
   asOf: Date = new Date(),
