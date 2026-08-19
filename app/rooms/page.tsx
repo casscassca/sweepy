@@ -289,7 +289,7 @@ export default function RoomsPage() {
     await load();
   }
 
-  const isRoomFormOpen = showRoomForm || !!editingRoom;
+  const isRoomFormOpen = showRoomForm;
   const q = query.trim().toLowerCase();
   const filtered = useMemo(() => {
     if (!q) return rooms;
@@ -386,38 +386,88 @@ export default function RoomsPage() {
             className="rounded-2xl overflow-hidden"
             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
           >
-            {/* Room header */}
+            {editingRoom?.id === room.id ? (
+              <form
+                onSubmit={saveRoom}
+                className="flex flex-col sm:flex-row gap-3 p-4 sm:items-end"
+              >
+                <div>
+                  <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Icon</label>
+                  <input
+                    value={roomIcon}
+                    onChange={(e) => setRoomIcon(e.target.value)}
+                    className="w-12 text-xl text-center"
+                    maxLength={2}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs mb-1.5" style={{ color: "var(--text3)" }}>Room name</label>
+                  <input
+                    autoFocus
+                    required
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl text-sm font-medium text-white"
+                  style={{ background: "var(--accent)" }}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingRoom(null)}
+                  className="px-3 py-2 rounded-xl text-sm"
+                  style={{ color: "var(--text3)" }}
+                >
+                  Cancel
+                </button>
+              </form>
+            ) : (
             <div
-              className="flex items-center gap-3 px-4 py-3.5 cursor-pointer select-none group"
+              className="flex flex-col gap-2 px-4 py-3.5 cursor-pointer select-none group"
               onClick={() => setExpanded((e) => ({ ...e, [room.id]: !e[room.id] }))}
             >
-              <span className="text-xl w-7 shrink-0 text-center">{room.icon}</span>
-              <span className="font-medium min-w-0 max-w-[42%] truncate">{room.name}</span>
-              <RoomDirtGauge tasks={room.tasks} asOf={dirtAsOf} />
-              <span className="text-xs w-14 shrink-0 text-right" style={{ color: "var(--text3)" }}>
-                {room.tasks.length} {room.tasks.length === 1 ? "task" : "tasks"}
-              </span>
-              <button
-                onClick={(e) => { e.stopPropagation(); setEditingRoom(room); setRoomName(room.name); setRoomIcon(room.icon); setShowRoomForm(false); }}
-                className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-                style={{ color: "var(--text3)" }}
-                aria-label="Edit room"
-              >
-                <Pencil size={13} />
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); deleteRoom(room.id); }}
-                className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-                aria-label="Delete room"
-                style={{ color: "var(--red)" }}
-              >
-                <Trash2 size={13} />
-              </button>
-              {expanded[room.id] || q
-                ? <ChevronDown size={14} style={{ color: "var(--text3)" }} />
-                : <ChevronRight size={14} style={{ color: "var(--text3)" }} />
-              }
+              <div className="flex items-center gap-2">
+                <span className="text-xl w-7 shrink-0 text-center">{room.icon}</span>
+                <span className="font-medium min-w-0 flex-1 md:flex-none md:max-w-[12rem] truncate">{room.name}</span>
+                <span className="hidden md:flex flex-1 min-w-10">
+                  <RoomDirtGauge tasks={room.tasks} asOf={dirtAsOf} />
+                </span>
+                <span className="text-xs hidden sm:block w-14 shrink-0 text-right" style={{ color: "var(--text3)" }}>
+                  {room.tasks.length} {room.tasks.length === 1 ? "task" : "tasks"}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setEditingRoom(room); setRoomName(room.name); setRoomIcon(room.icon); setShowRoomForm(false); }}
+                  className="p-2 rounded-lg shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                  style={{ color: "var(--text3)" }}
+                  aria-label="Edit room"
+                >
+                  <Pencil size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); deleteRoom(room.id); }}
+                  className="p-2 rounded-lg shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                  aria-label="Delete room"
+                  style={{ color: "var(--red)" }}
+                >
+                  <Trash2 size={13} />
+                </button>
+                {expanded[room.id] || q
+                  ? <ChevronDown size={14} className="shrink-0" style={{ color: "var(--text3)" }} />
+                  : <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text3)" }} />
+                }
+              </div>
+              <div className="flex md:hidden pl-9">
+                <RoomDirtGauge tasks={room.tasks} asOf={dirtAsOf} />
+              </div>
             </div>
+            )}
 
             {(expanded[room.id] || !!q) && (
               <div style={{ borderTop: "1px solid var(--border)" }}>
