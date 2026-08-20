@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { addTaskToDate, createOneOff, prepareAssignments } from "@/lib/scheduler";
+import { addTaskToDate, createOneOff } from "@/lib/scheduler";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { format } from "date-fns";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date") ?? format(new Date(), "yyyy-MM-dd");
-  if (searchParams.get("peek") !== "1") await prepareAssignments(date);
 
   const assignments = await prisma.dailyAssignment.findMany({
     where: { date, parked: false },

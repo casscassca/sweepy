@@ -242,22 +242,34 @@ export async function reshuffleFrom(
   await placeDueOnlyOnDueDays(fromDate, horizon);
   let assigned = 0;
   for (const date of days) {
-    assigned += (await runDailyAssignment(date, fromDate)).assigned;
+    assigned += (await runDailyAssignment(date, fromDate, { prepare: false })).assigned;
   }
   return { assigned };
 }
 
+let prepareLock: Promise<void> = Promise.resolve();
+
 export async function prepareAssignments(notBefore = todayStr()) {
-  await applyDirtPause(notBefore);
-  await applyVacation(notBefore);
-  const duplicates = await dedupeOpenAssignments();
-  const rolled = await rollForwardPastAssignments(notBefore);
-  const dropped = await dropCleanUnheldAssignments();
-  await snapDueOnlyToDueDay(notBefore);
-  await enforceCapacity(notBefore);
-  await snapToAllowedDays(notBefore);
-  await applyVacation(notBefore);
-  return { duplicates, rolled, dropped };
+  const previous = prepareLock;
+  let unlock = () => {};
+  prepareLock = new Promise<void>((resolve) => {
+    unlock = resolve;
+  });
+  await previous;
+  try {
+    await applyDirtPause(notBefore);
+    await applyVacation(notBefore);
+    const duplicates = await dedupeOpenAssignments();
+    const rolled = await rollForwardPastAssignments(notBefore);
+    const dropped = await dropCleanUnheldAssignments();
+    await snapDueOnlyToDueDay(notBefore);
+    await enforceCapacity(notBefore);
+    await snapToAllowedDays(notBefore);
+    await applyVacation(notBefore);
+    return { duplicates, rolled, dropped };
+  } finally {
+    unlock();
+  }
 }
 
 async function applyVacation(day: string) {
@@ -507,10 +519,14 @@ export async function createOneOff(opts: {
   return { ok: true as const, taskId: task.id };
 }
 
-export async function runDailyAssignment(dateStr?: string, householdToday = todayStr()) {
+export async function runDailyAssignment(
+  dateStr?: string,
+  householdToday = todayStr(),
+  opts?: { prepare?: boolean },
+) {
   const date = dateStr ?? householdToday;
   const targetDate = new Date(date + "T12:00:00"); // noon to avoid DST edge cases
-  await prepareAssignments(householdToday);
+  if (opts?.prepare !== false) await prepareAssignments(householdToday);
   const vac = await loadVacationContext(date);
   const dirtAsOf = vac.dirtAsOf;
 

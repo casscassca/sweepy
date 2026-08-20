@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { format, addDays, parseISO } from "date-fns";
-import { prepareAssignments, runDailyAssignment } from "@/lib/scheduler";
 
 function weekFrom(from: string | null): string[] {
   const start = from && /^\d{4}-\d{2}-\d{2}$/.test(from)
@@ -16,13 +15,6 @@ export async function GET(req: Request) {
   const days = weekFrom(searchParams.get("from"));
 
   try {
-    await prepareAssignments(days[0]);
-
-    // Top up each day with chores that are dirty enough on that day.
-    for (const date of days) {
-      await runDailyAssignment(date, days[0]);
-    }
-
     const assignments = await prisma.dailyAssignment.findMany({
       where: { date: { in: days }, parked: false },
       include: {

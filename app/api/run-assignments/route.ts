@@ -13,6 +13,6 @@ export async function POST(req: Request) {
   if (isManual) return NextResponse.json(await reshuffleFrom(date));
 
   await prepareAssignments(date);
-  const result = await runDailyAssignment(date);
+  const result = await runDailyAssignment(date, date, { prepare: false });
   return NextResponse.json(result);
 }
