@@ -12,16 +12,11 @@ require("dotenv").config();
 const readline = require("readline");
 const { randomBytes } = require("crypto");
 const { Pool } = require("pg");
+const { pgOpts } = require("./pg-opts");
 const rooms = require("./starter-catalog.json");
 
 function id() {
   return randomBytes(12).toString("hex");
-}
-
-function poolOpts(url) {
-  const parsed = new URL(url);
-  parsed.searchParams.delete("sslmode");
-  return { connectionString: parsed.toString(), max: 2, ssl: { rejectUnauthorized: false } };
 }
 
 function ask(query) {
@@ -41,7 +36,7 @@ function lastDoneAtFromDirtiness(dirtiness, frequencyDays) {
     console.error("DATABASE_URL must be a Postgres URI.");
     process.exit(1);
   }
-  const pool = new Pool(poolOpts(url));
+  const pool = new Pool(pgOpts(url));
 
   const counts = await pool.query(`
     SELECT

@@ -12,17 +12,12 @@ require("dotenv").config();
 const readline = require("readline");
 const { randomBytes, scryptSync } = require("crypto");
 const { Pool } = require("pg");
+const { pgOpts } = require("./pg-opts");
 
 function hashPassword(password) {
   const salt = randomBytes(16);
   const hash = scryptSync(password, salt, 64);
   return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
-}
-
-function poolOpts(url) {
-  const parsed = new URL(url);
-  parsed.searchParams.delete("sslmode");
-  return { connectionString: parsed.toString(), max: 2, ssl: { rejectUnauthorized: false } };
 }
 
 function ask(query) {
@@ -46,7 +41,7 @@ function askHidden(query) {
     console.error("DATABASE_URL must be a Postgres URI.");
     process.exit(1);
   }
-  const pool = new Pool(poolOpts(url));
+  const pool = new Pool(pgOpts(url));
 
   const PALETTE = ["#a78bfa", "#f472b6", "#fb923c", "#34d399", "#60a5fa", "#f87171", "#facc15", "#2dd4bf"];
 

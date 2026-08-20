@@ -9,8 +9,9 @@
  * tables. Replaces Sweepy rows only.
  */
 require("dotenv").config();
-const Database = require("better-sqlite3");
+const { DatabaseSync } = require("node:sqlite");
 const { Pool } = require("pg");
+const { pgOpts } = require("./pg-opts");
 
 const sqlitePath = process.argv[2];
 if (!sqlitePath) {
@@ -22,12 +23,6 @@ const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
 if (!url) {
   console.error("DIRECT_URL or DATABASE_URL is not set");
   process.exit(1);
-}
-
-function poolOpts(url) {
-  const parsed = new URL(url);
-  parsed.searchParams.delete("sslmode");
-  return { connectionString: parsed.toString(), max: 2, ssl: { rejectUnauthorized: false } };
 }
 
 const BOOL = new Set([
@@ -60,8 +55,8 @@ const TABLES = [
 ];
 
 (async () => {
-  const sqlite = new Database(sqlitePath, { readonly: true });
-  const pool = new Pool(poolOpts(url));
+  const sqlite = new DatabaseSync(sqlitePath, { readOnly: true });
+  const pool = new Pool(pgOpts(url));
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
