@@ -21,7 +21,11 @@ services:
   backup:
     profiles: ["backup"]
     container_name: sweepy-backup
-    image: alpine:3.21
+    image: ghcr.io/casscassca/sweepy:backup
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backup
     env_file:
       - path: .env
         required: true
@@ -33,7 +37,6 @@ services:
       - ${HOME}/.config/rclone:/root/.config/rclone
       - ./scripts/backup.sh:/scripts/backup.sh:ro
       - ./scripts/backup-entrypoint.sh:/scripts/backup-entrypoint.sh:ro
-    command: ["sh", "/scripts/backup-entrypoint.sh"]
     restart: unless-stopped
 
 volumes:

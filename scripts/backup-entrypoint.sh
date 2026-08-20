@@ -1,8 +1,6 @@
 #!/bin/sh
 set -eu
 
-apk add --no-cache rclone postgresql-client tzdata
-
 seconds_until_4am() {
   h=$(date +%H)
   m=$(date +%M)
