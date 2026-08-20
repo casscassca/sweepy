@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import Link from "next/link";
 import { ArrowLeft, RotateCcw } from "lucide-react";
-import { readJson } from "@/lib/read-json";
+import { getJson, invalidateLists } from "@/lib/api-cache";
 
 type Person = { id: string; name: string; color: string };
 type Entry = {
@@ -63,8 +63,8 @@ export default function HistoryPage() {
     if (who !== "all") params.set("userId", who);
     if (before) params.set("before", before);
     const [hist, people] = await Promise.all([
-      fetch(`/api/history?${params}`).then((res) => readJson<{ entries?: Entry[]; nextBefore?: string }>(res, { entries: [] })),
-      reset ? fetch("/api/users").then((res) => readJson<Person[]>(res, [])) : Promise.resolve(null),
+      getJson<{ entries?: Entry[]; nextBefore?: string }>(`/api/history?${params}`, { entries: [] }),
+      reset ? getJson<Person[]>("/api/users", []) : Promise.resolve(null),
     ]);
     const page = Array.isArray(hist.entries) ? hist.entries : [];
     setEntries((prev) => (reset ? page : [...prev, ...page]));
@@ -85,7 +85,10 @@ export default function HistoryPage() {
       body: JSON.stringify({ id }),
     });
     setUndoingId(null);
-    if (res.ok) setEntries((prev) => prev.filter((e) => e.id !== id));
+    if (res.ok) {
+      invalidateLists();
+      setEntries((prev) => prev.filter((e) => e.id !== id));
+    }
   }
 
   const groups = useMemo(() => {

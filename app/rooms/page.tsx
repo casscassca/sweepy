@@ -9,7 +9,7 @@ import DirtGauge from "@/components/DirtGauge";
 import { addonDetail, displayTaskDifficulty, displayTaskName, hasAddon } from "@/lib/addon";
 import { formatAllowedDays } from "@/lib/allowed-days";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
-import { readJson } from "@/lib/read-json";
+import { invalidateLists, loadJson } from "@/lib/api-cache";
 
 type User = { id: string; name: string; color: string };
 type Task = {
@@ -190,18 +190,17 @@ export default function RoomsPage() {
   const today = format(new Date(), "yyyy-MM-dd");
 
   async function load() {
-    const [r, u, a, me, settings] = await Promise.all([
-      fetch("/api/rooms").then((res) => readJson<Room[]>(res, [])),
-      fetch("/api/users").then((res) => readJson<User[]>(res, [])),
-      fetch(`/api/assignments?date=${today}&peek=1`).then((res) => readJson<{ task: { id: string } }[]>(res, [])),
-      fetch("/api/auth/me").then((res) => readJson<{ user?: { id: string } }>(res, {})),
-      fetch("/api/settings").then((res) => readJson<{ dirtAsOf?: string } | null>(res, null)),
+    await Promise.all([
+      loadJson<Room[]>("/api/rooms", [], (r) => setRooms(Array.isArray(r) ? r : [])),
+      loadJson<User[]>("/api/users", [], (u) => setUsers(Array.isArray(u) ? u : [])),
+      loadJson<{ task: { id: string } }[]>(`/api/assignments?date=${today}`, [], (a) => {
+        setOnToday(new Set((Array.isArray(a) ? a : []).map((x) => x.task.id)));
+      }),
+      loadJson<{ user?: { id: string } }>("/api/auth/me", {}, (me) => setMeId(me.user?.id)),
+      loadJson<{ dirtAsOf?: string } | null>("/api/settings", null, (settings) => {
+        setDirtAsOf(typeof settings?.dirtAsOf === "string" ? new Date(`${settings.dirtAsOf}T12:00:00`) : undefined);
+      }),
     ]);
-    setRooms(Array.isArray(r) ? r : []);
-    setUsers(Array.isArray(u) ? u : []);
-    setOnToday(new Set((Array.isArray(a) ? a : []).map((x) => x.task.id)));
-    setMeId(me.user?.id);
-    setDirtAsOf(typeof settings?.dirtAsOf === "string" ? new Date(`${settings.dirtAsOf}T12:00:00`) : undefined);
   }
 
   useEffect(() => { load(); }, []);
@@ -223,12 +222,14 @@ export default function RoomsPage() {
       });
     }
     setRoomName(""); setRoomIcon("🏠"); setShowRoomForm(false);
+    invalidateLists();
     load();
   }
 
   async function deleteRoom(id: string) {
     if (!confirm("Delete this room and all its tasks?")) return;
     await fetch(`/api/rooms/${id}`, { method: "DELETE" });
+    invalidateLists();
     load();
   }
 
@@ -251,11 +252,13 @@ export default function RoomsPage() {
       });
       setTaskForms((f) => ({ ...f, [roomId]: false }));
     }
+    invalidateLists();
     load();
   }
 
   async function deleteTask(id: string) {
     await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+    invalidateLists();
     load();
   }
 
@@ -268,6 +271,7 @@ export default function RoomsPage() {
       body: JSON.stringify({ taskId }),
     });
     if (res.ok) setOnToday((prev) => new Set(prev).add(taskId));
+    invalidateLists();
     setAddingId(null);
   }
 
@@ -285,6 +289,7 @@ export default function RoomsPage() {
       body: JSON.stringify({ taskId, completedById, completedAt }),
     });
     if (!res.ok) await load();
+    else invalidateLists();
   }
 
   async function uncompleteTask(taskId: string) {
@@ -293,6 +298,7 @@ export default function RoomsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ taskId }),
     });
+    invalidateLists();
     if (res.ok) await load();
   }
 

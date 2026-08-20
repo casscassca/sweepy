@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronRight, Moon, ScrollText, Sun } from "lucide-react";
 import { format } from "date-fns";
 import { backupIsStale } from "@/lib/backup";
-import { readJson } from "@/lib/read-json";
+import { loadJson } from "@/lib/api-cache";
 
 type LoadWeek = { needPts: number; capPts: number; needTasks: number; capTasks: number };
 type LoadStatus = {
@@ -45,18 +45,14 @@ export default function SettingsPage() {
     setWebhookUrl(`${window.location.origin}/api/ha-webhook`);
     setDarkMode(document.documentElement.getAttribute("data-theme") === "dark");
     fetch("/api/ha-status")
-      .then((res) => readJson<HaStatus | null>(res, null))
+      .then((res) => res.ok ? res.json() : null)
       .then(setHa)
       .catch(() => setHa(null));
-    fetch("/api/load")
-      .then((res) => readJson<LoadStatus | null>(res, null))
-      .then((data) => setLoad(data?.week ? data : null))
-      .catch(() => setLoad(null));
-    fetch("/api/settings")
-      .then((res) => readJson<{ backupAt?: string | null }>(res, {}))
-      .then((s) => setBackupAt(s.backupAt ?? null))
-      .catch(() => setBackupAt(null))
-      .finally(() => setBackupLoaded(true));
+    void loadJson<LoadStatus | null>("/api/load", null, (data) => setLoad(data?.week ? data : null));
+    void loadJson<{ backupAt?: string | null }>("/api/settings", {}, (s) => {
+      setBackupAt(s.backupAt ?? null);
+      setBackupLoaded(true);
+    });
   }, []);
 
   function toggleDark() {

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Pencil, Trash2, Plus, KeyRound, RefreshCw, Check, Copy, Bell, ScrollText, TreePalm } from "lucide-react";
 import { encodeWeek, parseWeek } from "@/lib/capacity";
 import { calendarDayStr } from "@/lib/dates";
-import { readJson } from "@/lib/read-json";
+import { invalidateApi, loadJson } from "@/lib/api-cache";
 import { houseVacationActive, vacationActive } from "@/lib/vacation";
 
 type User = {
@@ -199,21 +199,19 @@ export default function UsersPage() {
   const [notifyDetail, setNotifyDetail] = useState<string[] | null>(null);
 
   async function load() {
-    const [u, s, settings] = await Promise.all([
-      fetch("/api/users").then((res) => readJson<User[]>(res, [])),
-      fetch("/api/stats").then((res) => readJson<UserStats[]>(res, [])),
-      fetch("/api/settings").then((res) => readJson<HouseVac & { houseVacation?: boolean } | null>(res, null)),
+    await Promise.all([
+      loadJson<User[]>("/api/users", [], (u) => setUsers(Array.isArray(u) ? u : [])),
+      loadJson<UserStats[]>("/api/stats", [], (s) => setStats(Array.isArray(s) ? s : [])),
+      loadJson<HouseVac & { houseVacation?: boolean } | null>("/api/settings", null, (settings) => {
+        if (!settings) return;
+        setHouse({
+          houseVacation: settings.houseVacation === true,
+          houseVacationStart: settings.houseVacationStart ?? "",
+          houseVacationEnd: settings.houseVacationEnd ?? "",
+          pauseDirtiness: settings.pauseDirtiness === true,
+        });
+      }),
     ]);
-    setUsers(Array.isArray(u) ? u : []);
-    setStats(Array.isArray(s) ? s : []);
-    if (settings) {
-      setHouse({
-        houseVacation: settings.houseVacation === true,
-        houseVacationStart: settings.houseVacationStart ?? "",
-        houseVacationEnd: settings.houseVacationEnd ?? "",
-        pauseDirtiness: settings.pauseDirtiness === true,
-      });
-    }
   }
 
   useEffect(() => { load(); }, []);
@@ -277,12 +275,14 @@ export default function UsersPage() {
       await fetch("/api/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     }
     closeForm();
+    invalidateApi("/api/users", "/api/auth/me");
     load();
   }
 
   async function regenerateToken(id: string) {
     if (!confirm("Generate a new webhook token? The old one stops working — you'll need to update this person's Home Assistant automation.")) return;
     await fetch(`/api/users/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regenerateWebhookSecret: true }) });
+    invalidateApi("/api/users");
     load();
   }
 
@@ -314,6 +314,7 @@ export default function UsersPage() {
   async function remove(id: string) {
     if (!confirm("Remove this person?")) return;
     await fetch(`/api/users/${id}`, { method: "DELETE" });
+    invalidateApi("/api/users", "/api/auth/me");
     load();
   }
 
@@ -324,6 +325,7 @@ export default function UsersPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(next),
     });
+    invalidateApi("/api/settings", "/api/load");
   }
 
   const today = calendarDayStr();

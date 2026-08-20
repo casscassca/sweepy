@@ -13,7 +13,7 @@ import PersonMenu from "@/components/PersonMenu";
 import TaskNote from "@/components/TaskNote";
 import { assignmentDifficulty, assignmentLabel } from "@/lib/addon";
 import { useHideDone } from "@/lib/hide-done";
-import { readJson } from "@/lib/read-json";
+import { invalidateLists, loadJson } from "@/lib/api-cache";
 
 type User = { id: string; name: string; color: string; dailyCapacity: number; dailyTaskLimit?: number };
 type Task = { id: string; name: string; difficulty: number; oneOff?: boolean; important?: boolean; notes?: string; addonName?: string; addonFrequencyDays?: number; addonPoints?: number; addonLastDoneAt?: string | null; lastDoneAt?: string | null; frequencyDays?: number; dueOnly?: boolean; room: { name: string } | null };
@@ -157,14 +157,11 @@ export default function TodayPage() {
   const pct = total > 0 ? (totalDone / total) * 100 : 0;
 
   async function load() {
-    const [a, u, me] = await Promise.all([
-      fetch(`/api/assignments?date=${today}`).then((res) => readJson(res, [])),
-      fetch("/api/users").then((res) => readJson(res, [])),
-      fetch("/api/auth/me").then((res) => readJson<{ user?: { id: string } }>(res, {})),
+    await Promise.all([
+      loadJson<Assignment[]>(`/api/assignments?date=${today}`, [], (a) => setAssignments(Array.isArray(a) ? a : [])),
+      loadJson<User[]>("/api/users", [], (u) => setUsers(Array.isArray(u) ? u : [])),
+      loadJson<{ user?: { id: string } }>("/api/auth/me", {}, (me) => setMeId(me.user?.id)),
     ]);
-    setAssignments(Array.isArray(a) ? a : []);
-    setUsers(Array.isArray(u) ? u : []);
-    setMeId(me.user?.id);
   }
 
   useEffect(() => { load(); }, []);
@@ -172,6 +169,7 @@ export default function TodayPage() {
   async function runAssignment() {
     setRunning(true);
     await fetch(`/api/run-assignments?manual=true&date=${today}`, { method: "POST" });
+    invalidateLists();
     await load(); setRunning(false);
   }
 
@@ -184,18 +182,21 @@ export default function TodayPage() {
         : prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: stamp } : a))
     );
     const res = await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt }) });
+    invalidateLists();
     if (!res.ok) load();
   }
 
   async function uncomplete(assignmentId: string) {
     setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: null } : a)));
     const res = await fetch("/api/complete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId }) });
+    invalidateLists();
     if (!res.ok) load();
   }
 
   async function remove(assignmentId: string) {
     setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
     const res = await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
+    invalidateLists();
     if (!res.ok) load();
   }
 
@@ -243,6 +244,7 @@ export default function TodayPage() {
     });
     setAssignments(updated.map((a) => { const r = reordered.find((x) => x.id === a.id); return r ? { ...a, userId: r.userId, order: r.order } : a; }));
     await fetch("/api/assignments", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignments: reordered }) });
+    invalidateLists();
   }
 
   return (
@@ -331,7 +333,7 @@ export default function TodayPage() {
           users={users}
           defaultUserId={meId}
           onClose={() => setAdding(false)}
-          onAdded={() => load()}
+          onAdded={() => { invalidateLists(); load(); }}
         />
       )}
     </div>

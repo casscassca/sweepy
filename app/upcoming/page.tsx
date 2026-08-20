@@ -18,7 +18,7 @@ import PersonMenu from "@/components/PersonMenu";
 import TaskNote from "@/components/TaskNote";
 import type { TaskFormTask } from "@/components/TaskFormFields";
 import { useHideDone } from "@/lib/hide-done";
-import { readJson } from "@/lib/read-json";
+import { invalidateLists, loadJson } from "@/lib/api-cache";
 
 type User = { id: string; name: string; color: string };
 type Task = TaskFormTask & { room: { name: string } | null; oneOff?: boolean };
@@ -245,17 +245,16 @@ export default function UpcomingPage() {
   const [dirtAsOf, setDirtAsOf] = useState<Date | undefined>();
 
   async function load() {
-    setLoading(true);
-    const [upcomingRes, usersRes, meRes, settings] = await Promise.all([
-      fetch(`/api/upcoming?from=${days[0]}`).then((res) => readJson<{ assignments?: Assignment[] }>(res, {})),
-      fetch("/api/users").then((res) => readJson<User[]>(res, [])),
-      fetch("/api/auth/me").then((res) => readJson<{ user?: User }>(res, {})),
-      fetch("/api/settings").then((res) => readJson<{ dirtAsOf?: string } | null>(res, null)),
+    await Promise.all([
+      loadJson<{ assignments?: Assignment[] }>(`/api/upcoming?from=${days[0]}`, {}, (upcomingRes) => {
+        setAssignments(Array.isArray(upcomingRes.assignments) ? upcomingRes.assignments : []);
+      }),
+      loadJson<User[]>("/api/users", [], (usersRes) => setUsers(Array.isArray(usersRes) ? usersRes : [])),
+      loadJson<{ user?: User }>("/api/auth/me", {}, (meRes) => setMe(meRes.user ?? null)),
+      loadJson<{ dirtAsOf?: string } | null>("/api/settings", null, (settings) => {
+        setDirtAsOf(typeof settings?.dirtAsOf === "string" ? new Date(`${settings.dirtAsOf}T12:00:00`) : undefined);
+      }),
     ]);
-    setAssignments(Array.isArray(upcomingRes.assignments) ? upcomingRes.assignments : []);
-    setUsers(Array.isArray(usersRes) ? usersRes : []);
-    setMe(meRes.user ?? null);
-    setDirtAsOf(typeof settings?.dirtAsOf === "string" ? new Date(`${settings.dirtAsOf}T12:00:00`) : undefined);
     setLoading(false);
   }
 
@@ -268,17 +267,20 @@ export default function UpcomingPage() {
       prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: stamp, date: day } : a))
     );
     const res = await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt: day }) });
+    invalidateLists();
     if (!res.ok) load();
   }
 
   async function uncomplete(assignmentId: string) {
     setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: null } : a)));
     const res = await fetch("/api/complete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId }) });
+    invalidateLists();
     if (!res.ok) load();
   }
 
   async function remove(assignmentId: string) {
     await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
+    invalidateLists();
     setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
   }
 
@@ -330,6 +332,7 @@ export default function UpcomingPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ date: targetDate }),
     });
+    invalidateLists();
     await load();
   }
 
@@ -378,8 +381,8 @@ export default function UpcomingPage() {
         />
       </div>
 
-      {loading ? (
-        <div className="text-center py-20" style={{ color: "var(--text3)" }}>Planning your week…</div>
+      {loading && assignments.length === 0 ? (
+        <div className="text-center py-20" style={{ color: "var(--text3)" }}>Loading…</div>
       ) : (
         <DndContext
           sensors={sensors}
@@ -477,7 +480,7 @@ export default function UpcomingPage() {
           users={users}
           defaultUserId={me?.id}
           onClose={() => setAddingDate(null)}
-          onAdded={() => load()}
+          onAdded={() => { invalidateLists(); load(); }}
         />
       )}
     </div>

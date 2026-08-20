@@ -3,6 +3,7 @@ import "./globals.css";
 import Nav from "@/components/Nav";
 import ThemeProvider from "@/components/ThemeProvider";
 import BackupBanner from "@/components/BackupBanner";
+import WarmCache from "@/components/WarmCache";
 
 export const metadata: Metadata = {
   title: "Sweepy",
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="h-full">
       <body className="min-h-full flex flex-col" style={{ background: "var(--bg)" }}>
         <ThemeProvider>
+          <WarmCache />
           <Nav />
           <BackupBanner />
           <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-6 md:px-5 md:py-8 max-md:pb-24">
