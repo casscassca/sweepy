@@ -1,24 +1,27 @@
 #!/usr/bin/env node
 /* eslint-disable @typescript-eslint/no-require-imports */
 /*
- * Seed the starter rooms and tasks from starter-catalog.json onto DATABASE_URL
- * (the data volume on the Pi, or prisma/dev.db locally).
+ * Seed the starter rooms and tasks from starter-catalog.json onto DATABASE_URL.
  *
  *   docker exec -it sweepy node scripts/seed.js
  *
  * Does not create users (use set-password.js). Asks before wiping existing
  * rooms, tasks, or history.
- *
- * Dirtiness 1–3 in the catalog maps to the in-app slider:
- *   1 clean → just cleaned,  2 medium → due,  3 high → filthy (never done).
  */
+require("dotenv").config();
 const readline = require("readline");
 const { randomBytes } = require("crypto");
-const Database = require("better-sqlite3");
+const { Pool } = require("pg");
 const rooms = require("./starter-catalog.json");
 
 function id() {
   return randomBytes(12).toString("hex");
+}
+
+function poolOpts(url) {
+  const parsed = new URL(url);
+  parsed.searchParams.delete("sslmode");
+  return { connectionString: parsed.toString(), max: 2, ssl: { rejectUnauthorized: false } };
 }
 
 function ask(query) {
@@ -26,7 +29,6 @@ function ask(query) {
   return new Promise((resolve) => rl.question(query, (a) => { rl.close(); resolve(a.trim()); }));
 }
 
-/** Catalog dirtiness 1–3 → lastDoneAt (null = filthy). */
 function lastDoneAtFromDirtiness(dirtiness, frequencyDays) {
   if (!dirtiness || dirtiness >= 3 || frequencyDays <= 0) return null;
   const ratio = dirtiness <= 1 ? 0.2 : 1;
@@ -34,56 +36,65 @@ function lastDoneAtFromDirtiness(dirtiness, frequencyDays) {
 }
 
 (async () => {
-  const dbUrl = process.env.DATABASE_URL || "file:./prisma/dev.db";
-  const db = new Database(dbUrl.replace(/^file:/, ""));
+  const url = process.env.DATABASE_URL;
+  if (!url || url.startsWith("file:")) {
+    console.error("DATABASE_URL must be a Postgres URI.");
+    process.exit(1);
+  }
+  const pool = new Pool(poolOpts(url));
 
-  const counts = {
-    rooms: db.prepare("SELECT count(*) c FROM Room").get().c,
-    tasks: db.prepare("SELECT count(*) c FROM Task").get().c,
-    completions: db.prepare("SELECT count(*) c FROM CompletionLog").get().c,
-  };
-  if (counts.rooms || counts.tasks || counts.completions) {
-    console.log(`This database already has ${counts.rooms} rooms, ${counts.tasks} tasks, ${counts.completions} completions.`);
+  const counts = await pool.query(`
+    SELECT
+      (SELECT count(*)::int FROM "Room") AS rooms,
+      (SELECT count(*)::int FROM "Task") AS tasks,
+      (SELECT count(*)::int FROM "CompletionLog") AS completions
+  `);
+  const { rooms: roomN, tasks: taskN, completions } = counts.rows[0];
+  if (roomN || taskN || completions) {
+    console.log(`This database already has ${roomN} rooms, ${taskN} tasks, ${completions} completions.`);
     const ans = await ask("Seeding DELETES all of that and re-creates the defaults. Continue? (y/n): ");
     if (ans.toLowerCase() !== "y") {
       console.log("Aborted — nothing changed.");
+      await pool.end();
       process.exit(0);
     }
   }
 
-  const seed = db.transaction(() => {
-    db.prepare("DELETE FROM TaskAssignableUser").run();
-    db.prepare("DELETE FROM DailyAssignment").run();
-    db.prepare("DELETE FROM CompletionLog").run();
-    db.prepare("DELETE FROM Task").run();
-    db.prepare("DELETE FROM Room").run();
-
-    const insRoom = db.prepare('INSERT INTO Room (id, name, icon, "order") VALUES (?, ?, ?, ?)');
-    const insTask = db.prepare(
-      "INSERT INTO Task (id, name, roomId, difficulty, frequencyDays, lastDoneAt) VALUES (?, ?, ?, ?, ?, ?)",
-    );
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query('DELETE FROM "TaskAssignableUser"');
+    await client.query('DELETE FROM "DailyAssignment"');
+    await client.query('DELETE FROM "CompletionLog"');
+    await client.query('DELETE FROM "Task"');
+    await client.query('DELETE FROM "Room"');
 
     let taskCount = 0;
-    rooms.forEach((room, i) => {
+    for (let i = 0; i < rooms.length; i++) {
+      const room = rooms[i];
       const roomId = id();
-      insRoom.run(roomId, room.name, room.icon, i);
+      await client.query('INSERT INTO "Room" (id, name, icon, "order") VALUES ($1, $2, $3, $4)', [
+        roomId, room.name, room.icon, i,
+      ]);
       for (const t of room.tasks) {
-        insTask.run(
-          id(),
-          t.name,
-          roomId,
-          t.difficulty,
-          t.frequencyDays,
-          lastDoneAtFromDirtiness(t.dirtiness, t.frequencyDays),
+        await client.query(
+          'INSERT INTO "Task" (id, name, "roomId", difficulty, "frequencyDays", "lastDoneAt") VALUES ($1, $2, $3, $4, $5, $6)',
+          [id(), t.name, roomId, t.difficulty, t.frequencyDays, lastDoneAtFromDirtiness(t.dirtiness, t.frequencyDays)],
         );
         taskCount++;
       }
-    });
-    return taskCount;
-  });
-
-  const taskCount = seed();
-  console.log(`\n✓ Seeded ${rooms.length} rooms with ${taskCount} tasks.`);
-  console.log("Next: create your login with  node scripts/set-password.js");
-  db.close();
-})();
+    }
+    await client.query("COMMIT");
+    console.log(`\nSeeded ${rooms.length} rooms with ${taskCount} tasks.`);
+    console.log("Next: create your login with  node scripts/set-password.js");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -3,25 +3,26 @@
 /*
  * Create the first account, or set/reset a household member's login password.
  *
- * Run it on the Pi inside the running container:
  *   docker exec -it sweepy node scripts/set-password.js
  *   docker exec -it sweepy node scripts/set-password.js Cassandra
  *
- * If the named person doesn't exist yet (e.g. an empty database), it offers to
- * create them — this is how you bootstrap the very first login. It writes
- * directly to the SQLite database, using the same scrypt hash format as the app
- * (lib/auth.ts). The password is typed interactively (never passed as an
- * argument, so it stays out of your shell history). A webhook token is
- * generated for anyone who doesn't have one.
+ * Uses DATABASE_URL (Postgres). The password is typed interactively.
  */
+require("dotenv").config();
 const readline = require("readline");
 const { randomBytes, scryptSync } = require("crypto");
-const Database = require("better-sqlite3");
+const { Pool } = require("pg");
 
 function hashPassword(password) {
   const salt = randomBytes(16);
   const hash = scryptSync(password, salt, 64);
   return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
+}
+
+function poolOpts(url) {
+  const parsed = new URL(url);
+  parsed.searchParams.delete("sslmode");
+  return { connectionString: parsed.toString(), max: 2, ssl: { rejectUnauthorized: false } };
 }
 
 function ask(query) {
@@ -40,13 +41,18 @@ function askHidden(query) {
 }
 
 (async () => {
-  const dbUrl = process.env.DATABASE_URL || "file:./prisma/dev.db";
-  const dbPath = dbUrl.replace(/^file:/, "");
-  const db = new Database(dbPath);
+  const url = process.env.DATABASE_URL;
+  if (!url || url.startsWith("file:")) {
+    console.error("DATABASE_URL must be a Postgres URI.");
+    process.exit(1);
+  }
+  const pool = new Pool(poolOpts(url));
 
   const PALETTE = ["#a78bfa", "#f472b6", "#fb923c", "#34d399", "#60a5fa", "#f87171", "#facc15", "#2dd4bf"];
 
-  const users = db.prepare("SELECT id, name, passwordHash, webhookSecret FROM User ORDER BY createdAt").all();
+  const { rows: users } = await pool.query(
+    'SELECT id, name, "passwordHash", "webhookSecret" FROM "User" ORDER BY "createdAt"',
+  );
 
   let name = process.argv[2];
   if (!name) {
@@ -54,7 +60,7 @@ function askHidden(query) {
       console.log("People:");
       for (const u of users) console.log(`  - ${u.name}${u.passwordHash ? " (has password)" : ""}`);
     } else {
-      console.log("No people exist yet — let's create the first account.");
+      console.log("No people exist yet, let's create the first account.");
     }
     name = await ask("\nName: ");
   }
@@ -84,22 +90,27 @@ function askHidden(query) {
   if (user) {
     newSecret = user.webhookSecret ? null : randomBytes(24).toString("hex");
     if (newSecret) {
-      db.prepare("UPDATE User SET passwordHash = ?, webhookSecret = ? WHERE id = ?").run(hashPassword(pw), newSecret, user.id);
+      await pool.query('UPDATE "User" SET "passwordHash" = $1, "webhookSecret" = $2 WHERE id = $3', [
+        hashPassword(pw), newSecret, user.id,
+      ]);
     } else {
-      db.prepare("UPDATE User SET passwordHash = ? WHERE id = ?").run(hashPassword(pw), user.id);
+      await pool.query('UPDATE "User" SET "passwordHash" = $1 WHERE id = $2', [hashPassword(pw), user.id]);
     }
-    console.log(`\n✓ Password updated for ${user.name}.`);
+    console.log(`\nPassword updated for ${user.name}.`);
   } else {
-    // Bootstrap a brand-new person. id has no DB-side default (cuid is applied
-    // by the Prisma client), so generate one here; other columns use their
-    // schema defaults.
     const id = randomBytes(16).toString("hex");
     newSecret = randomBytes(24).toString("hex");
     const color = PALETTE[users.length % PALETTE.length];
-    db.prepare("INSERT INTO User (id, name, color, webhookSecret, passwordHash) VALUES (?, ?, ?, ?, ?)").run(id, name, color, newSecret, hashPassword(pw));
-    console.log(`\n✓ Created ${name} and set their password.`);
+    await pool.query(
+      'INSERT INTO "User" (id, name, color, "webhookSecret", "passwordHash") VALUES ($1, $2, $3, $4, $5)',
+      [id, name, color, newSecret, hashPassword(pw)],
+    );
+    console.log(`\nCreated ${name} and set their password.`);
   }
 
   if (newSecret) console.log(`  Webhook token (for Home Assistant): ${newSecret}`);
-  db.close();
-})();
+  await pool.end();
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

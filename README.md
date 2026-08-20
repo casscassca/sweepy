@@ -10,7 +10,7 @@ npx prisma generate
 npm run dev
 ```
 
-Uses `prisma/dev.db`. Create a login with `node scripts/set-password.js`.
+Uses `DATABASE_URL` / `DIRECT_URL` (Postgres, usually Supabase). Create a login with `node scripts/set-password.js`.
 
 ## Seed rooms and tasks (Pi)
 

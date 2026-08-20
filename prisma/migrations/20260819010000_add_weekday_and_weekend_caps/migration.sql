@@ -1,8 +1,0 @@
--- AlterTable
-ALTER TABLE "User" ADD COLUMN "weekdayCapacities" TEXT NOT NULL DEFAULT '';
-ALTER TABLE "User" ADD COLUMN "weekdayTaskLimits" TEXT NOT NULL DEFAULT '';
-
--- AlterTable
-ALTER TABLE "Settings" ADD COLUMN "weekendShare" BOOLEAN NOT NULL DEFAULT true;
-ALTER TABLE "Settings" ADD COLUMN "weekendCapacity" INTEGER NOT NULL DEFAULT 6;
-ALTER TABLE "Settings" ADD COLUMN "weekendTaskLimit" INTEGER NOT NULL DEFAULT 4;

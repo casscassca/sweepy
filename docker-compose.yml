@@ -15,7 +15,8 @@ services:
     volumes:
       - sweepy-data:/app/data
     environment:
-      DATABASE_URL: ${DATABASE_URL:-file:/app/data/sweepy.db}
+      DATABASE_URL: ${DATABASE_URL}
+      DIRECT_URL: ${DIRECT_URL}
       TZ: ${TZ:-America/Chicago}
       HA_URL: ${HA_URL:-}
       HA_TOKEN: ${HA_TOKEN:-}

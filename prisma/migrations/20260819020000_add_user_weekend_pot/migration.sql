@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE "User" ADD COLUMN "weekendCapacity" INTEGER NOT NULL DEFAULT 6;
-ALTER TABLE "User" ADD COLUMN "weekendTaskLimit" INTEGER NOT NULL DEFAULT 4;
