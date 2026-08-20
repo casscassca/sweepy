@@ -94,7 +94,8 @@ export function roomDirtiness(
 export function dirtWord(ratio: number): string {
   if (ratio < DIRT_SHOW_AT) return "clean";
   if (ratio < 1) return "getting there";
-  if (ratio < 2) return "due";
+  if (ratio <= 1) return "due";
+  if (ratio < 2) return "past due";
   return "filthy";
 }
 

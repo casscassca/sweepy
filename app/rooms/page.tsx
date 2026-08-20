@@ -6,7 +6,7 @@ import TaskFormFields, { formatFrequency, parseTaskForm } from "@/components/Tas
 import CompleteAsMenu from "@/components/CompleteAsMenu";
 import RoomDirtGauge from "@/components/RoomDirtGauge";
 import DirtGauge from "@/components/DirtGauge";
-import { addonDetail, displayTaskDifficulty, displayTaskName, hasAddon } from "@/lib/addon";
+import { addonDetail, displayTaskDifficulty, displayTaskName, hasAddon, isCatchUpTask } from "@/lib/addon";
 import { formatAllowedDays } from "@/lib/allowed-days";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 import { invalidateLists, loadJson } from "@/lib/api-cache";
@@ -85,6 +85,8 @@ function CatalogTaskRow({
 }) {
   const [showWho, setShowWho] = useState(false);
   const done = doneOn(task.lastDoneAt, today);
+  const ratio = dirtinessRatio(task.lastDoneAt, task.frequencyDays, dirtAsOf);
+  const catchUp = isCatchUpTask(task, dirtAsOf);
 
   function markMine() {
     if (meId) onComplete(meId);
@@ -103,7 +105,7 @@ function CatalogTaskRow({
         {done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
       </button>
       <DirtGauge
-        ratio={dirtinessRatio(task.lastDoneAt, task.frequencyDays, dirtAsOf)}
+        ratio={ratio}
         title={dirtDetail(task.lastDoneAt, task.frequencyDays, dirtAsOf)}
       />
       <div className="flex-1 min-w-0">
@@ -119,6 +121,11 @@ function CatalogTaskRow({
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <DiffBadge n={displayTaskDifficulty(task)} />
           <span className="text-xs" style={{ color: "var(--text3)" }}>{freqLabel(task.frequencyDays)}</span>
+          {catchUp && (
+            <span className="text-xs" style={{ color: "var(--red)" }}>
+              {task.lastDoneAt ? "past due" : "never done"}
+            </span>
+          )}
           {hasAddon(task) && (
             <span className="text-xs" style={{ color: "var(--text3)" }}>{addonDetail(task)}</span>
           )}

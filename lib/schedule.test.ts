@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { isAllowedOnDate, nextAllowedOnOrAfter } from "./allowed-days";
 import { overflowNextDate } from "./capacity";
-import { cleanlinessPct, dirtinessRatio, dueDayStr, dueOnAllowedDay, isDirtyEnough } from "./dirtiness";
+import { cleanlinessPct, dirtWord, dirtinessRatio, dueDayStr, dueOnAllowedDay, isDirtyEnough } from "./dirtiness";
 import { daysForFrequency } from "./frequency";
 import { personAway, returnDay } from "./vacation";
 
@@ -61,5 +61,11 @@ describe("room bar at due", () => {
   it("stays nearly full when a chore is only just due", () => {
     assert.equal(cleanlinessPct(1), 88);
     assert.ok(cleanlinessPct(2) < 50);
+  });
+
+  it("calls past-due what catch-up counts, not due or filthy", () => {
+    assert.equal(dirtWord(1), "due");
+    assert.equal(dirtWord(1.2), "past due");
+    assert.equal(dirtWord(2), "filthy");
   });
 });

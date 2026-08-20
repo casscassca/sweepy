@@ -1,6 +1,5 @@
-import { displayTaskDifficulty, isAddonDue } from "./addon";
+import { displayTaskDifficulty, isCatchUpTask } from "./addon";
 import { weekCapacity, type PersonCaps } from "./capacity";
-import { dirtinessRatio } from "./dirtiness";
 
 export type LoadTask = {
   difficulty: number;
@@ -31,24 +30,34 @@ export function taskCountLoadPerDay(task: LoadTask) {
   return 1 / task.frequencyDays;
 }
 
-function isBehindHealthy(task: LoadTask, asOf: Date) {
-  return dirtinessRatio(task.lastDoneAt ?? null, task.frequencyDays, asOf) >= 1 || isAddonDue(task, asOf);
-}
-
 export function householdLoad(tasks: LoadTask[], people: LoadPerson[], asOf: Date = new Date()) {
   const catalog = tasks.filter((t) => !t.oneOff);
   const needPtsDay = catalog.reduce((s, t) => s + taskPointLoadPerDay(t), 0);
   const needTasksDay = catalog.reduce((s, t) => s + taskCountLoadPerDay(t), 0);
   const weekCap = weekCapacity(people);
-  const overdue = catalog.filter((t) => isBehindHealthy(t, asOf));
+  // Catalog-wide past due (never done included). Due today and Today's list are not this count.
+  const overdue = catalog.filter((t) => isCatchUpTask(t, asOf));
+  const needPts = needPtsDay * 7;
+  const needTasks = needTasksDay * 7;
+  // Point cap is a ceiling. A 6-pt / 3-task day usually fills seats × catalog average, not 6.
+  const avgPts = needTasksDay > 0 ? needPtsDay / needTasksDay : 1;
+  const typicalPts = Math.min(weekCap.pts, weekCap.tasks * avgPts);
+  const leftoverPts = typicalPts - needPts;
+  const leftoverTasks = weekCap.tasks - needTasks;
+  const catchUpPts = overdue.reduce((s, t) => s + displayTaskDifficulty(t, asOf), 0);
+  const catchUpTasks = overdue.length;
+  const byPts = leftoverPts > 0.05 ? (catchUpPts / leftoverPts) * 7 : Number.POSITIVE_INFINITY;
+  const byTasks = leftoverTasks > 0.05 ? (catchUpTasks / leftoverTasks) * 7 : Number.POSITIVE_INFINITY;
+  const days = Math.max(byPts, byTasks);
 
   return {
     taskCount: catalog.length,
     week: {
-      needPts: needPtsDay * 7,
+      needPts,
       capPts: weekCap.pts,
-      needTasks: needTasksDay * 7,
+      needTasks,
       capTasks: weekCap.tasks,
+      typicalPts,
     },
     day: {
       needPts: needPtsDay,
@@ -57,8 +66,9 @@ export function householdLoad(tasks: LoadTask[], people: LoadPerson[], asOf: Dat
       capTasks: weekCap.tasks / 7,
     },
     catchUp: {
-      pts: overdue.reduce((s, t) => s + displayTaskDifficulty(t, asOf), 0),
-      tasks: overdue.length,
+      pts: catchUpPts,
+      tasks: catchUpTasks,
+      days: Number.isFinite(days) ? days : null,
     },
   };
 }

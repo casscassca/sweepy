@@ -6,11 +6,11 @@ import { format } from "date-fns";
 import { backupIsStale } from "@/lib/backup";
 import { loadJson } from "@/lib/api-cache";
 
-type LoadWeek = { needPts: number; capPts: number; needTasks: number; capTasks: number };
+type LoadWeek = { needPts: number; capPts: number; needTasks: number; capTasks: number; typicalPts?: number };
 type LoadStatus = {
   taskCount: number;
   week: LoadWeek;
-  catchUp?: { pts: number; tasks: number };
+  catchUp?: { pts: number; tasks: number; days?: number | null };
 };
 
 type HaPerson = { name: string; target: string; resolved: string | null; ok: boolean; hint: string | null };
@@ -272,25 +272,24 @@ function fmt(n: number) {
 }
 
 function WorkloadCard({ load }: { load: LoadStatus }) {
-  const gap = load.week.needPts - load.week.capPts;
+  const typicalPts = load.week.typicalPts ?? load.week.capPts;
+  const gap = load.week.needPts - typicalPts;
   const behind = gap > 0.05;
   const catchUpPts = load.catchUp?.pts ?? 0;
   const catchUpTasks = load.catchUp?.tasks ?? 0;
   const dirty = catchUpPts > 0.05;
   const scale = Math.max(load.week.needPts, load.week.capPts, 1);
-  const slack = load.week.capPts - load.week.needPts;
-  const headline = dirty
-    ? `${fmt(catchUpPts)} pts to get the house current`
-    : behind
-      ? `${fmt(gap)} pts behind each week`
-      : gap < -0.05
-        ? `${fmt(-gap)} pts of slack each week`
-        : "Combined cap matches the catalog";
+  const slack = typicalPts - load.week.needPts;
+  const headline = behind
+    ? `Typical mix is ${fmt(gap)} pts short each week`
+    : slack > 0.05
+      ? `${fmt(slack)} pts of slack each week at a typical mix`
+      : "Typical mix covers the catalog";
   const pace = !dirty
     ? null
-    : slack > 0.05
-      ? `About ${fmt((catchUpPts / slack) * 7)} days of leftover cap`
-      : "Cap is used staying current, so overdue work sits";
+    : load.catchUp?.days != null
+      ? `About ${fmt(load.catchUp.days)} days at a typical mix`
+      : "Typical days are used staying current, so overdue work sits";
 
   return (
     <div className="mt-5 pt-5" style={{ borderTop: "1px solid var(--border)" }}>
@@ -300,11 +299,8 @@ function WorkloadCard({ load }: { load: LoadStatus }) {
           Edit caps
         </Link>
       </div>
-      <p className="text-sm font-medium" style={{ color: dirty || behind ? "var(--red)" : "var(--green)" }}>
+      <p className="text-sm font-medium mb-4" style={{ color: behind ? "var(--red)" : "var(--green)" }}>
         {headline}
-      </p>
-      <p className="text-xs mt-0.5 mb-4" style={{ color: "var(--text3)" }}>
-        Household total · weekdays plus each person's weekend pot · add-ons at their own interval
       </p>
 
       <div className="relative h-2 rounded-full mb-3" style={{ background: "var(--surface2)" }}>
@@ -328,14 +324,14 @@ function WorkloadCard({ load }: { load: LoadStatus }) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <p className="text-xs" style={{ color: "var(--text3)" }}>To stay current</p>
+          <p className="text-xs" style={{ color: "var(--text3)" }}>To stay where we are</p>
           <p className="text-lg font-semibold tracking-tight">{fmt(load.week.needPts)} <span className="text-xs font-medium" style={{ color: "var(--text3)" }}>pts/week</span></p>
           <p className="text-xs" style={{ color: "var(--text3)" }}>{fmt(load.week.needPts / 7)} / day</p>
         </div>
         <div>
           <p className="text-xs" style={{ color: "var(--text3)" }}>Combined cap</p>
-          <p className="text-lg font-semibold tracking-tight">{fmt(load.week.capPts)} <span className="text-xs font-medium" style={{ color: "var(--text3)" }}>pts/week</span></p>
-          <p className="text-xs" style={{ color: "var(--text3)" }}>{fmt(load.week.capPts / 7)} / day</p>
+          <p className="text-lg font-semibold tracking-tight">{fmt(load.week.capPts)} <span className="text-xs font-medium" style={{ color: "var(--text3)" }}>pts/week max</span></p>
+          <p className="text-xs" style={{ color: "var(--text3)" }}>{fmt(typicalPts)} typical · {fmt(typicalPts / 7)} / day</p>
         </div>
       </div>
 
@@ -345,13 +341,13 @@ function WorkloadCard({ load }: { load: LoadStatus }) {
           <>
             <p className="text-lg font-semibold tracking-tight">{fmt(catchUpPts)} <span className="text-xs font-medium" style={{ color: "var(--text3)" }}>pts overdue</span></p>
             <p className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>
-              {catchUpTasks} chore{catchUpTasks === 1 ? "" : "s"} past due{pace ? ` · ${pace}` : ""}
+              {catchUpTasks} of {load.taskCount} in the catalog past due{pace ? ` · ${pace}` : ""}
             </p>
           </>
         ) : (
           <>
-            <p className="text-lg font-semibold tracking-tight" style={{ color: "var(--green)" }}>House is current</p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>Nothing in the catalog is past due</p>
+            <p className="text-lg font-semibold tracking-tight" style={{ color: "var(--green)" }}>Nothing is overdue</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>Due today still counts as current</p>
           </>
         )}
       </div>
