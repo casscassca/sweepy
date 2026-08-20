@@ -47,8 +47,8 @@ export async function completeAssignment(opts: {
     },
   });
 
-  await dismissAssignmentNotify(opts.assignmentId);
-  if (assignment.id !== opts.assignmentId) await dismissAssignmentNotify(assignment.id);
+  void dismissAssignmentNotify(opts.assignmentId);
+  if (assignment.id !== opts.assignmentId) void dismissAssignmentNotify(assignment.id);
 
   return { ok: true as const, assignment };
 }

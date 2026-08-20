@@ -72,7 +72,7 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
         <GripVertical size={14} />
       </div>
       {onComplete && (
-        <button onClick={() => { if (done) { onUncomplete?.(assignment.id); } else { markMine(); } }} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 min-h-11 w-9 flex items-center justify-center -ml-1" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
+        <button type="button" onClick={() => { if (done) { onUncomplete?.(assignment.id); } else { markMine(); } }} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 min-h-11 w-9 flex items-center justify-center -ml-1" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
           {done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
         </button>
       )}
@@ -262,13 +262,19 @@ export default function UpcomingPage() {
   useEffect(() => { load(); }, []);
 
   async function complete(assignmentId: string, completedById: string | null, completedAt?: string) {
-    await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt: completedAt ?? days[0] }) });
-    load();
+    const day = completedAt ?? days[0];
+    const stamp = `${day}T12:00:00`;
+    setAssignments((prev) =>
+      prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: stamp, date: day } : a))
+    );
+    const res = await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt: day }) });
+    if (!res.ok) load();
   }
 
   async function uncomplete(assignmentId: string) {
-    await fetch("/api/complete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId }) });
-    load();
+    setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: null } : a)));
+    const res = await fetch("/api/complete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId }) });
+    if (!res.ok) load();
   }
 
   async function remove(assignmentId: string) {

@@ -272,21 +272,28 @@ export default function RoomsPage() {
   }
 
   async function completeTask(taskId: string, completedById: string | null, completedAt?: string) {
-    await fetch("/api/complete", {
+    const stamp = completedAt ? `${completedAt}T12:00:00` : new Date().toISOString();
+    setRooms((prev) =>
+      prev.map((room) => ({
+        ...room,
+        tasks: room.tasks.map((t) => (t.id === taskId ? { ...t, lastDoneAt: stamp } : t)),
+      }))
+    );
+    const res = await fetch("/api/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ taskId, completedById, completedAt }),
     });
-    await load();
+    if (!res.ok) await load();
   }
 
   async function uncompleteTask(taskId: string) {
-    await fetch("/api/complete", {
+    const res = await fetch("/api/complete", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ taskId }),
     });
-    await load();
+    if (res.ok) await load();
   }
 
   const isRoomFormOpen = showRoomForm;

@@ -49,7 +49,7 @@ function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRem
       <button {...attributes} {...listeners} aria-label="Reorder task" className="cursor-grab touch-none p-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0" style={{ color: "var(--text3)" }}>
         <GripVertical size={14} />
       </button>
-      <button onClick={() => done ? onUncomplete(assignment.id) : markMine()} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 transition-colors min-h-11 w-9 flex items-center justify-center -ml-1" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
+      <button type="button" onClick={() => done ? onUncomplete(assignment.id) : markMine()} aria-label={done ? "Mark incomplete" : "Mark complete"} className="shrink-0 transition-colors min-h-11 w-9 flex items-center justify-center -ml-1" style={{ color: done ? "var(--green)" : "var(--text3)" }}>
         {done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
       </button>
       <div className="flex-1 min-w-0">
@@ -94,7 +94,7 @@ function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRem
             <UserCheck size={16} />
           </button>
         )}
-        <button onClick={() => onRemove(assignment.id)} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }} title="Remove from today" aria-label="Remove from today">
+        <button type="button" onClick={() => onRemove(assignment.id)} className="p-2 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: "var(--text3)" }} title="Remove from today" aria-label="Remove from today">
           <X size={16} />
         </button>
         <button
@@ -176,18 +176,27 @@ export default function TodayPage() {
   }
 
   async function complete(assignmentId: string, completedById: string | null, completedAt?: string) {
-    await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt }) });
-    load();
+    const stamp = completedAt ? `${completedAt}T12:00:00` : new Date().toISOString();
+    const leftToday = Boolean(completedAt && completedAt !== today);
+    setAssignments((prev) =>
+      leftToday
+        ? prev.filter((a) => a.id !== assignmentId)
+        : prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: stamp } : a))
+    );
+    const res = await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt }) });
+    if (!res.ok) load();
   }
 
   async function uncomplete(assignmentId: string) {
-    await fetch("/api/complete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId }) });
-    load();
+    setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: null } : a)));
+    const res = await fetch("/api/complete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId }) });
+    if (!res.ok) load();
   }
 
   async function remove(assignmentId: string) {
-    await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
-    load();
+    setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
+    const res = await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
+    if (!res.ok) load();
   }
 
   async function reassign(assignmentId: string, userId: string) {
