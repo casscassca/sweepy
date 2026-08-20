@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import ThemeProvider from "@/components/ThemeProvider";
+import BackupBanner from "@/components/BackupBanner";
 
 export const metadata: Metadata = {
   title: "Sweepy",
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex flex-col" style={{ background: "var(--bg)" }}>
         <ThemeProvider>
           <Nav />
+          <BackupBanner />
           <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-6 md:px-5 md:py-8 max-md:pb-24">
             {children}
           </main>

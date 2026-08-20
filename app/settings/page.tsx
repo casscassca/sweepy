@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Moon, ScrollText, Sun } from "lucide-react";
 import { format } from "date-fns";
+import { backupIsStale } from "@/lib/backup";
 import { readJson } from "@/lib/read-json";
 
 type LoadWeek = { needPts: number; capPts: number; needTasks: number; capTasks: number };
@@ -37,6 +38,8 @@ export default function SettingsPage() {
   const [showHaDetails, setShowHaDetails] = useState(false);
   const [showHow, setShowHow] = useState(false);
   const [load, setLoad] = useState<LoadStatus | null>(null);
+  const [backupAt, setBackupAt] = useState<string | null>(null);
+  const [backupLoaded, setBackupLoaded] = useState(false);
 
   useEffect(() => {
     setWebhookUrl(`${window.location.origin}/api/ha-webhook`);
@@ -49,6 +52,11 @@ export default function SettingsPage() {
       .then((res) => readJson<LoadStatus | null>(res, null))
       .then((data) => setLoad(data?.week ? data : null))
       .catch(() => setLoad(null));
+    fetch("/api/settings")
+      .then((res) => readJson<{ backupAt?: string | null }>(res, {}))
+      .then((s) => setBackupAt(s.backupAt ?? null))
+      .catch(() => setBackupAt(null))
+      .finally(() => setBackupLoaded(true));
   }, []);
 
   function toggleDark() {
@@ -91,6 +99,20 @@ export default function SettingsPage() {
           </button>
         </div>
         {load && <WorkloadCard load={load} />}
+      </div>
+
+      <div className="p-5 rounded-2xl mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
+        <h2 className="font-medium mb-2">Backup</h2>
+        <p className="text-sm" style={{ color: backupLoaded && backupIsStale(backupAt) ? "var(--red)" : "var(--text2)" }}>
+          {!backupLoaded
+            ? "Checking…"
+            : backupAt
+              ? `Last backup ${format(new Date(backupAt), "EEEE, MMM d 'at' h:mm a")}`
+              : "No backup yet"}
+        </p>
+        <p className="text-xs mt-1" style={{ color: "var(--text3)" }}>
+          Daily copy to Google Drive, in backups/sweepy. The last 30 days are kept.
+        </p>
       </div>
 
       <div className="p-5 rounded-2xl space-y-3 mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>

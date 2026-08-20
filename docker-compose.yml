@@ -18,5 +18,23 @@ services:
       TZ: ${TZ:-America/Chicago}
     restart: unless-stopped
 
+  backup:
+    profiles: ["backup"]
+    container_name: sweepy-backup
+    image: alpine:3.21
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      TZ: ${TZ:-America/Chicago}
+      RCLONE_REMOTE: gdrive:backups/sweepy
+      PGSSLMODE: require
+    volumes:
+      - ${HOME}/.config/rclone:/root/.config/rclone
+      - ./scripts/backup.sh:/scripts/backup.sh:ro
+      - ./scripts/backup-entrypoint.sh:/scripts/backup-entrypoint.sh:ro
+    command: ["sh", "/scripts/backup-entrypoint.sh"]
+    restart: unless-stopped
+
 volumes:
   sweepy-data:
