@@ -40,7 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <WarmCache />
           <Nav />
-          <BackupBanner />
+          {process.env.NODE_ENV === "production" && <BackupBanner />}
           <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-6 md:px-5 md:py-8 max-md:pb-24">
             {children}
           </main>
