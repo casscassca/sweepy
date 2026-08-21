@@ -29,6 +29,12 @@ export function isCatchUpTask(task: AddonFields, asOf?: Date) {
   return dirtinessRatio(task.addonLastDoneAt ?? null, task.addonFrequencyDays as number, when) > 1;
 }
 
+export function isDueToday(task: AddonFields, asOf?: Date) {
+  const when = asOf ?? new Date();
+  if (isCatchUpTask(task, when)) return false;
+  return dirtinessRatio(task.lastDoneAt ?? null, task.frequencyDays ?? 0, when) >= 1 || isAddonDue(task, when);
+}
+
 export function displayTaskName(task: AddonFields, asOf: Date = new Date()) {
   const name = task.name ?? "";
   if (!isAddonDue(task, asOf)) return name;

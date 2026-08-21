@@ -6,7 +6,7 @@ import TaskFormFields, { formatFrequency, parseTaskForm } from "@/components/Tas
 import CompleteAsMenu from "@/components/CompleteAsMenu";
 import RoomDirtGauge from "@/components/RoomDirtGauge";
 import DirtGauge from "@/components/DirtGauge";
-import { addonDetail, displayTaskDifficulty, displayTaskName, hasAddon, isCatchUpTask } from "@/lib/addon";
+import { addonDetail, displayTaskDifficulty, displayTaskName, hasAddon, isCatchUpTask, isDueToday } from "@/lib/addon";
 import { formatAllowedDays } from "@/lib/allowed-days";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 import { invalidateLists, loadJson } from "@/lib/api-cache";
@@ -179,6 +179,28 @@ function CatalogTaskRow({
   );
 }
 
+function FilterChip({
+  label, active, onClick,
+}: {
+  label: string; active: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="px-3 py-1.5 rounded-xl text-sm font-medium shrink-0 transition-all"
+      style={{
+        background: active ? "var(--accent-dim)" : "var(--surface)",
+        color: active ? "var(--accent)" : "var(--text2)",
+        border: `2px solid ${active ? "var(--accent)" : "var(--border)"}`,
+        boxShadow: active ? "none" : "var(--shadow)",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -192,6 +214,7 @@ export default function RoomsPage() {
   const [onToday, setOnToday] = useState<Set<string>>(new Set());
   const [addingId, setAddingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [dueFilter, setDueFilter] = useState<"all" | "overdue" | "due">("all");
   const [meId, setMeId] = useState<string | undefined>();
   const [dirtAsOf, setDirtAsOf] = useState<Date | undefined>();
   const today = format(new Date(), "yyyy-MM-dd");
@@ -311,22 +334,29 @@ export default function RoomsPage() {
 
   const isRoomFormOpen = showRoomForm;
   const q = query.trim().toLowerCase();
+  const browsing = !!q || dueFilter !== "all";
   const filtered = useMemo(() => {
-    if (!q) return rooms;
     return rooms
       .map((room) => {
-        const roomMatch = room.name.toLowerCase().includes(q);
-        const tasks = roomMatch
-          ? room.tasks
-          : room.tasks.filter((t) => t.name.toLowerCase().includes(q));
+        let tasks = room.tasks;
+        if (q) {
+          const roomMatch = room.name.toLowerCase().includes(q);
+          if (!roomMatch) tasks = tasks.filter((t) => t.name.toLowerCase().includes(q));
+        }
+        if (dueFilter === "overdue") tasks = tasks.filter((t) => isCatchUpTask(t, dirtAsOf));
+        if (dueFilter === "due") tasks = tasks.filter((t) => isDueToday(t, dirtAsOf));
         return { ...room, tasks };
       })
-      .filter((room) => room.name.toLowerCase().includes(q) || room.tasks.length > 0);
-  }, [rooms, q]);
+      .filter((room) => {
+        if (dueFilter !== "all") return room.tasks.length > 0;
+        if (!q) return true;
+        return room.name.toLowerCase().includes(q) || room.tasks.length > 0;
+      });
+  }, [rooms, q, dueFilter, dirtAsOf]);
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Rooms & Tasks</h1>
           <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>
@@ -353,6 +383,12 @@ export default function RoomsPage() {
             <Plus size={14} /> Add Room
           </button>
         </div>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto mb-5 py-1 -mx-1 px-1">
+        <FilterChip label="All" active={dueFilter === "all"} onClick={() => setDueFilter("all")} />
+        <FilterChip label="Overdue" active={dueFilter === "overdue"} onClick={() => setDueFilter("overdue")} />
+        <FilterChip label="Due today" active={dueFilter === "due"} onClick={() => setDueFilter("due")} />
       </div>
 
       {isRoomFormOpen && (
@@ -478,7 +514,7 @@ export default function RoomsPage() {
                 >
                   <Trash2 size={13} />
                 </button>
-                {expanded[room.id] || q
+                {expanded[room.id] || browsing
                   ? <ChevronDown size={14} className="shrink-0" style={{ color: "var(--text3)" }} />
                   : <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text3)" }} />
                 }
@@ -489,7 +525,7 @@ export default function RoomsPage() {
             </div>
             )}
 
-            {(expanded[room.id] || !!q) && (
+            {(expanded[room.id] || browsing) && (
               <div style={{ borderTop: "1px solid var(--border)" }}>
                 {room.tasks.map((task) => (
                   <div key={task.id} style={{ borderBottom: "1px solid var(--border)" }}>
@@ -544,10 +580,18 @@ export default function RoomsPage() {
 
         {filtered.length === 0 && (
           <div className="text-center py-20" style={{ color: "var(--text2)" }}>
-            <p className="text-4xl mb-3">{q ? "🔍" : "🏠"}</p>
-            <p className="font-medium">{q ? "No matching rooms or tasks" : "No rooms yet"}</p>
+            <p className="text-4xl mb-3">{browsing ? "🔍" : "🏠"}</p>
+            <p className="font-medium">
+              {dueFilter === "overdue"
+                ? "Nothing overdue"
+                : dueFilter === "due"
+                  ? "Nothing due today"
+                  : q
+                    ? "No matching rooms or tasks"
+                    : "No rooms yet"}
+            </p>
             <p className="text-sm mt-1" style={{ color: "var(--text3)" }}>
-              {q ? "Try a different name" : "Add a room to get started"}
+              {browsing ? "Try a different name or filter" : "Add a room to get started"}
             </p>
           </div>
         )}
