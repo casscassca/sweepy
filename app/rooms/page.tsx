@@ -10,6 +10,7 @@ import { addonDetail, displayTaskDifficulty, displayTaskName, hasAddon, isCatchU
 import { formatAllowedDays } from "@/lib/allowed-days";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 import { invalidateLists, loadJson } from "@/lib/api-cache";
+import { uiDirtAsOf } from "@/lib/vacation";
 
 type User = { id: string; name: string; color: string };
 type Task = {
@@ -89,8 +90,9 @@ function CatalogTaskRow({
 }) {
   const [showWho, setShowWho] = useState(false);
   const done = doneOn(task.lastDoneAt, today);
-  const ratio = dirtinessRatio(task.lastDoneAt, task.frequencyDays, dirtAsOf);
-  const catchUp = isCatchUpTask(task, dirtAsOf);
+  const asOf = uiDirtAsOf(task, dirtAsOf);
+  const ratio = dirtinessRatio(task.lastDoneAt, task.frequencyDays, asOf);
+  const catchUp = isCatchUpTask(task, asOf);
 
   function markMine() {
     if (meId) onComplete(meId);
@@ -110,7 +112,7 @@ function CatalogTaskRow({
       </button>
       <DirtGauge
         ratio={ratio}
-        title={dirtDetail(task.lastDoneAt, task.frequencyDays, dirtAsOf)}
+        title={dirtDetail(task.lastDoneAt, task.frequencyDays, asOf)}
       />
       <div className="flex-1 min-w-0">
         <div
@@ -350,8 +352,8 @@ export default function RoomsPage() {
           const roomMatch = room.name.toLowerCase().includes(q);
           if (!roomMatch) tasks = tasks.filter((t) => t.name.toLowerCase().includes(q));
         }
-        if (dueFilter === "overdue") tasks = tasks.filter((t) => isCatchUpTask(t, dirtAsOf));
-        if (dueFilter === "due") tasks = tasks.filter((t) => isDueToday(t, dirtAsOf));
+        if (dueFilter === "overdue") tasks = tasks.filter((t) => isCatchUpTask(t, uiDirtAsOf(t, dirtAsOf)));
+        if (dueFilter === "due") tasks = tasks.filter((t) => isDueToday(t, uiDirtAsOf(t, dirtAsOf)));
         return { ...room, tasks };
       })
       .filter((room) => {

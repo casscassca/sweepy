@@ -6,6 +6,7 @@ import { comboTaskName, stackedTaskName } from "@/lib/addon";
 import { lastDoneAtFromRatio } from "@/lib/dirtiness";
 import { daysForFrequency, FREQ_UNITS, splitFrequency, type FreqUnit } from "@/lib/frequency";
 import { allowedMask, DAY_SHORT, encodeAllowedDays } from "@/lib/allowed-days";
+import { uiDirtAsOf } from "@/lib/vacation";
 
 export { formatFrequency } from "@/lib/frequency";
 
@@ -116,6 +117,7 @@ export default function TaskFormFields({
   const [taskName, setTaskName] = useState(task?.name ?? "");
   const [difficulty, setDifficulty] = useState(task?.difficulty ?? 1);
   const [addonOn, setAddonOn] = useState(Boolean(task?.addonName?.trim()));
+  const taskDirtAsOf = uiDirtAsOf(task ?? {}, dirtAsOf);
   const initialAddonFreq = splitFrequency(task?.addonFrequencyDays && task.addonFrequencyDays > 0 ? task.addonFrequencyDays : 21);
   const [addonFreqCount, setAddonFreqCount] = useState(initialAddonFreq.count);
   const [addonFreqUnit, setAddonFreqUnit] = useState<FreqUnit>(initialAddonFreq.unit);
@@ -208,7 +210,7 @@ export default function TaskFormFields({
           </div>
         </div>
       </div>
-      <DirtSlider key={frequencyDays} lastDoneAt={task?.lastDoneAt} frequencyDays={frequencyDays} asOf={dirtAsOf} />
+      <DirtSlider key={frequencyDays} lastDoneAt={task?.lastDoneAt} frequencyDays={frequencyDays} asOf={taskDirtAsOf} />
       <label className="flex items-start gap-2.5 text-sm cursor-pointer">
         <input type="checkbox" name="addonOn" checked={addonOn} onChange={(e) => {
           setAddonOn(e.target.checked);
@@ -274,7 +276,7 @@ export default function TaskFormFields({
             key={addonFrequencyDays}
             lastDoneAt={task?.addonLastDoneAt ?? task?.lastDoneAt ?? null}
             frequencyDays={addonFrequencyDays}
-            asOf={dirtAsOf}
+            asOf={taskDirtAsOf}
             name="addonDirtRatio"
             inputId="addon-dirt-ratio"
             label={`How long since ${addonName.trim() || "the add-on"}?`}
@@ -339,7 +341,7 @@ export default function TaskFormFields({
                 key={addon2FrequencyDays}
                 lastDoneAt={task?.addon2LastDoneAt ?? task?.addonLastDoneAt ?? task?.lastDoneAt ?? null}
                 frequencyDays={addon2FrequencyDays}
-                asOf={dirtAsOf}
+                asOf={taskDirtAsOf}
                 name="addon2DirtRatio"
                 inputId="addon2-dirt-ratio"
                 label={`How long since ${addon2Name.trim() || "this add-on"}?`}

@@ -16,7 +16,7 @@ import {
   type PersonCaps,
 } from "./capacity";
 import { canSpillForCapacity, rankForSpill } from "./capacity-policy";
-import { personAway, returnDay } from "./vacation";
+import { dirtAsOfForTask, personAway, returnDay } from "./vacation";
 import { applyDirtPause, loadVacationContext } from "./vacation-db";
 import { isAllowedOnDate, nextAllowedOnOrAfter } from "./allowed-days";
 import { scheduleHaMqttSync } from "./ha-mqtt";
@@ -65,13 +65,16 @@ export async function dedupeOpenAssignments() {
 export async function dropCleanUnheldAssignments() {
   const open = await prisma.dailyAssignment.findMany({
     where: { completedAt: null, held: false, parked: false },
-    include: { task: { select: { lastDoneAt: true, frequencyDays: true, oneOff: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true, addon2Name: true, addon2FrequencyDays: true, addon2Points: true, addon2LastDoneAt: true } } },
+    include: { task: { select: { lastDoneAt: true, frequencyDays: true, oneOff: true, important: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true, addon2Name: true, addon2FrequencyDays: true, addon2Points: true, addon2LastDoneAt: true } } },
   });
-  const { house, dirtAsOf } = await loadVacationContext(todayStr());
+  const { house } = await loadVacationContext(todayStr());
+  const day = todayStr();
   const drop = open
     .filter((a) => {
       if (a.task.oneOff) return false;
-      const asOf = house.pauseDirtiness && house.dirtFrozenOn ? dirtAsOf : new Date(`${a.date}T12:00:00`);
+      const asOf = house.pauseDirtiness && house.dirtFrozenOn
+        ? dirtAsOfForTask(house, day, a.task)
+        : new Date(`${a.date}T12:00:00`);
       return !isTaskEligible(a.task, asOf);
     })
     .map((a) => a.id);
@@ -214,7 +217,6 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
     for (const [userId, items] of byUser) {
       const person = users.find((u) => u.id === userId);
       if (person && personAway(person, vac.house, date)) continue;
-      const asOf = vac.dirtAsOf;
       let usedPts: number;
       let usedTasks: number;
       let limitPts: number;
@@ -237,17 +239,21 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
       const ranked = rankForSpill(
         items
           .filter((a) => !a.task.oneOff)
-          .map((a) => ({
-            ...a,
-            exclusive: a.task.assignableUsers.length === 1,
-            dirt: dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays, asOf),
-          }))
+          .map((a) => {
+            const taskAsOf = dirtAsOfForTask(vac.house, date, a.task);
+            return {
+              ...a,
+              exclusive: a.task.assignableUsers.length === 1,
+              dirt: dirtinessRatio(a.task.lastDoneAt, a.task.frequencyDays, taskAsOf),
+              taskAsOf,
+            };
+          })
           .filter(canSpillForCapacity),
       );
       let idx = 0;
       while ((usedPts > limitPts || usedTasks > limitTasks) && idx < ranked.length) {
         const spill = ranked[idx++];
-        const difficulty = displayTaskDifficulty(spill.task, asOf);
+        const difficulty = displayTaskDifficulty(spill.task, spill.taskAsOf);
         const handed = await handOffToSomeoneWithRoom({
           assignmentId: spill.id,
           date,
@@ -472,7 +478,7 @@ async function placeDueOnlyOnDueDays(fromDate: string, horizon: number, onlyDate
 
     const exclusive = task.assignableUsers.length === 1;
     const mustOver = task.important && exclusive;
-    const difficulty = displayTaskDifficulty(task, vac.dirtAsOf);
+    const difficulty = displayTaskDifficulty(task, dirtAsOfForTask(vac.house, fromDate, task));
 
     const allowedOn = (day: string) =>
       (task.assignableUsers.length > 0
@@ -652,7 +658,6 @@ export async function runDailyAssignment(
   const targetDate = new Date(date + "T12:00:00"); // noon to avoid DST edge cases
   if (opts?.prepare !== false) await prepareAssignments(householdToday);
   const vac = await loadVacationContext(date);
-  const dirtAsOf = vac.dirtAsOf;
 
   const [tasks, users, existing, openElsewhere] = await Promise.all([
     prisma.task.findMany({
@@ -676,13 +681,17 @@ export async function runDailyAssignment(
   const eligible = tasks
     .filter((t) => !alreadyAssignedIds.has(t.id) && !blockedIds.has(t.id))
     .filter((t) => isAllowedOnDate(t.allowedDays, date))
-    .map((t) => ({
-      task: t,
-      dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, dirtAsOf),
-      exclusive: t.assignableUsers.length === 1,
-      important: t.important,
-    }))
-    .filter(({ task }) => isTaskEligible(task, dirtAsOf))
+    .map((t) => {
+      const asOf = dirtAsOfForTask(vac.house, date, t);
+      return {
+        task: t,
+        dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, asOf),
+        exclusive: t.assignableUsers.length === 1,
+        important: t.important,
+        asOf,
+      };
+    })
+    .filter(({ task, asOf }) => isTaskEligible(task, asOf))
     .sort((a, b) => {
       if (a.important !== b.important) return a.important ? -1 : 1;
       if (a.exclusive !== b.exclusive) return a.exclusive ? -1 : 1;

@@ -613,7 +613,7 @@ export default function UsersPage() {
                   ? "No auto-assign or morning notifies while everyone is away"
                   : houseAway
                     ? house.pauseDirtiness
-                      ? "Everyone is away. Chores stay as dirty as they are now."
+                      ? "Everyone is away. Regular chores stay as dirty as they are now; Important ones keep aging."
                       : "Everyone is away. Chores keep getting dirtier."
                     : "Optional dates. Leave them blank to stay off until you uncheck."}
               </p>
@@ -646,6 +646,11 @@ export default function UsersPage() {
                 />
                 Pause dirtiness
               </label>
+              {house.pauseDirtiness && (
+                <p className="text-xs pl-6" style={{ color: "var(--text3)" }}>
+                  Regular chores freeze. Important ones keep aging so filters and similar stay on schedule when you get back.
+                </p>
+              )}
             </div>
           )}
         </div>

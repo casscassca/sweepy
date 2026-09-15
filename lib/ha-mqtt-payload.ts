@@ -453,6 +453,7 @@ export function buildPublishPlan(opts: {
     const stateTopic = `${topics.base}/task/${task.id}/state`;
     const lastDoneId = lastDoneObjectId(task.id);
     extras.push(lastDoneId);
+    const taskAsOf = task.important ? new Date(`${today}T12:00:00`) : asOf;
     pushDiscovery("sensor", taskObjectId(task.id), taskDiscovery(task, topics));
     pushDiscovery("sensor", lastDoneId, lastDoneDiscovery({
       name: `${task.name} last done`,
@@ -464,7 +465,7 @@ export function buildPublishPlan(opts: {
     pushDiscovery("device_automation", completedTriggerId(task.id), completedTriggerDiscovery(task, topics));
     messages.push({
       topic: stateTopic,
-      payload: JSON.stringify(taskState(task, nextByTask.get(task.id), asOf, today)),
+      payload: JSON.stringify(taskState(task, nextByTask.get(task.id), taskAsOf, today)),
       retain: true,
     });
 
@@ -494,7 +495,7 @@ export function buildPublishPlan(opts: {
           name: addonName,
           lastDoneAt: task.addonLastDoneAt,
           frequencyDays: task.addonFrequencyDays,
-          asOf,
+          asOf: taskAsOf,
           parentId: task.id,
           layer: "addon",
         })),
@@ -528,7 +529,7 @@ export function buildPublishPlan(opts: {
           name: addonName,
           lastDoneAt: task.addon2LastDoneAt,
           frequencyDays: task.addon2FrequencyDays,
-          asOf,
+          asOf: taskAsOf,
           parentId: task.id,
           layer: "addon2",
         })),

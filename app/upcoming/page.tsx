@@ -11,6 +11,7 @@ import { GripVertical, CheckCircle2, Circle, Pencil, Pin, Plus, Star, UserCheck,
 import { assignmentDifficulty, assignmentLabel } from "@/lib/addon";
 import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 import DirtGauge from "@/components/DirtGauge";
+import { uiDirtAsOf } from "@/lib/vacation";
 import TaskEditModal from "@/components/TaskEditModal";
 import AddToDaySheet from "@/components/AddToDaySheet";
 import CompleteAsMenu from "@/components/CompleteAsMenu";
@@ -111,8 +112,8 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
           {!done && !assignment.task.oneOff && (
             <DirtGauge
               size={22}
-              ratio={dirtinessRatio(assignment.task.lastDoneAt, assignment.task.frequencyDays, dirtAsOf)}
-              title={dirtDetail(assignment.task.lastDoneAt, assignment.task.frequencyDays, dirtAsOf)}
+              ratio={dirtinessRatio(assignment.task.lastDoneAt, assignment.task.frequencyDays, uiDirtAsOf(assignment.task, dirtAsOf))}
+              title={dirtDetail(assignment.task.lastDoneAt, assignment.task.frequencyDays, uiDirtAsOf(assignment.task, dirtAsOf))}
             />
           )}
         </div>

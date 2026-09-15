@@ -83,11 +83,14 @@ export function cleanlinessPct(ratio: number): number {
 }
 
 export function roomDirtiness(
-  tasks: Array<{ lastDoneAt: Date | string | null; frequencyDays: number }>,
+  tasks: Array<{ lastDoneAt: Date | string | null; frequencyDays: number; important?: boolean }>,
   asOf: Date = new Date(),
 ): number {
   if (tasks.length === 0) return 0;
-  const total = tasks.reduce((sum, t) => sum + dirtinessRatio(t.lastDoneAt, t.frequencyDays, asOf), 0);
+  const total = tasks.reduce((sum, t) => {
+    const when = t.important ? new Date() : asOf;
+    return sum + dirtinessRatio(t.lastDoneAt, t.frequencyDays, when);
+  }, 0);
   return total / tasks.length;
 }
 

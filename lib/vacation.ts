@@ -56,3 +56,22 @@ export function dirtAsOfDate(house: HouseVacation, day: string): Date {
   return new Date();
 }
 
+export function dirtAsOfForTask(
+  house: HouseVacation,
+  day: string,
+  task: { important?: boolean },
+): Date {
+  if (task.important && houseVacationActive(house, day) && house.pauseDirtiness && house.dirtFrozenOn) {
+    return new Date(`${day}T12:00:00`);
+  }
+  return dirtAsOfDate(house, day);
+}
+
+export function uiDirtAsOf(task: { important?: boolean }, dirtAsOf?: Date) {
+  return task.important ? undefined : dirtAsOf;
+}
+
+export function pausesDirtiness(task: { important?: boolean }) {
+  return !task.important;
+}
+

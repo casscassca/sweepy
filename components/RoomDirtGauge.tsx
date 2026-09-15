@@ -1,7 +1,7 @@
 import { CircleAlert, Sparkles } from "lucide-react";
 import { DIRT_SHOW_AT, cleanlinessPct, dirtColor, dirtWord, roomDirtiness } from "@/lib/dirtiness";
 
-type TaskDirt = { lastDoneAt: Date | string | null; frequencyDays: number };
+type TaskDirt = { lastDoneAt: Date | string | null; frequencyDays: number; important?: boolean };
 
 export default function RoomDirtGauge({ tasks, asOf }: { tasks: TaskDirt[]; asOf?: Date }) {
   const empty = tasks.length === 0;

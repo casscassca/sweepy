@@ -1,7 +1,7 @@
 import { addDays } from "date-fns";
 import { calendarDaysBetween } from "./dates";
 import { prisma } from "./prisma";
-import { dirtAsOfDate, houseVacationActive, personAway, type HouseVacation } from "./vacation";
+import { dirtAsOfDate, houseVacationActive, pausesDirtiness, personAway, type HouseVacation } from "./vacation";
 
 const HOUSE_SELECT = {
   houseVacation: true,
@@ -48,9 +48,16 @@ export async function applyDirtPause(day: string) {
   const days = calendarDaysBetween(day, house.dirtFrozenOn);
   if (days > 0) {
     const tasks = await prisma.task.findMany({
-      select: { id: true, lastDoneAt: true, addonLastDoneAt: true, addon2LastDoneAt: true },
+      select: {
+        id: true,
+        important: true,
+        lastDoneAt: true,
+        addonLastDoneAt: true,
+        addon2LastDoneAt: true,
+      },
     });
     for (const task of tasks) {
+      if (!pausesDirtiness(task)) continue;
       const data: { lastDoneAt?: Date; addonLastDoneAt?: Date; addon2LastDoneAt?: Date } = {};
       if (task.lastDoneAt) data.lastDoneAt = addDays(task.lastDoneAt, days);
       if (task.addonLastDoneAt) data.addonLastDoneAt = addDays(task.addonLastDoneAt, days);
