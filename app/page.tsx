@@ -176,10 +176,17 @@ export default function TodayPage() {
   async function complete(assignmentId: string, completedById: string | null, completedAt?: string) {
     const stamp = completedAt ? `${completedAt}T12:00:00` : new Date().toISOString();
     const leftToday = Boolean(completedAt && completedAt !== today);
+    const nextUser = completedById ? users.find((u) => u.id === completedById) : undefined;
     setAssignments((prev) =>
       leftToday
         ? prev.filter((a) => a.id !== assignmentId)
-        : prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: stamp } : a))
+        : prev.map((a) => (a.id === assignmentId
+          ? {
+              ...a,
+              completedAt: stamp,
+              ...(nextUser ? { userId: nextUser.id, user: nextUser } : {}),
+            }
+          : a))
     );
     const res = await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt }) });
     invalidateLists();

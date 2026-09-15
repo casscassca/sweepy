@@ -33,7 +33,12 @@ export async function completeAssignment(opts: {
 
   const assignment = await prisma.dailyAssignment.update({
     where: { id },
-    data: { completedAt: opts.completedAt, completedById, remindAt: null },
+    data: {
+      completedAt: opts.completedAt,
+      completedById,
+      remindAt: null,
+      ...(completedById ? { userId: completedById } : {}),
+    },
   });
 
   const task = await prisma.task.findUnique({ where: { id: assignment.taskId } });
@@ -89,6 +94,7 @@ export async function completeTask(opts: {
     assignmentId: placed.assignment.id,
     completedById: opts.completedById,
     completedAt: opts.completedAt,
+    date,
   });
 }
 

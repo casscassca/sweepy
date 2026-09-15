@@ -268,8 +268,16 @@ export default function UpcomingPage() {
   async function complete(assignmentId: string, completedById: string | null, completedAt?: string) {
     const day = completedAt ?? days[0];
     const stamp = `${day}T12:00:00`;
+    const nextUser = completedById ? users.find((u) => u.id === completedById) : undefined;
     setAssignments((prev) =>
-      prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: stamp, date: day } : a))
+      prev.map((a) => (a.id === assignmentId
+        ? {
+            ...a,
+            completedAt: stamp,
+            date: day,
+            ...(nextUser ? { userId: nextUser.id, user: nextUser } : {}),
+          }
+        : a))
     );
     const res = await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt: day }) });
     invalidateLists();
