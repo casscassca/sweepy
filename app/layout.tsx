@@ -10,10 +10,7 @@ export const metadata: Metadata = {
   description: "Home cleaning task manager",
   applicationName: "Sweepy",
   icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "48x48" },
-      { url: "/favicon.png", type: "image/png", sizes: "512x512" },
-    ],
+    icon: [{ url: "/icon-512.png", type: "image/png", sizes: "512x512" }],
     apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
   },
   appleWebApp: {
