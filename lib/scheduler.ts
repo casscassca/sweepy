@@ -171,8 +171,8 @@ async function handOffToSomeoneWithRoom(opts: {
 
 /**
  * Every row on the day counts, including pins, one-offs, and completed work.
- * Dragged chores, one-offs, and exclusive important chores may sit over the
- * cap; everything else overflows.
+ * One-offs and exclusive important chores may sit over the cap; dragged chores
+ * displace autos but still overflow when a pin already fills the seat.
  */
 export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
   const users = await prisma.user.findMany({

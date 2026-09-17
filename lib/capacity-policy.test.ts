@@ -22,10 +22,19 @@ describe("capacity overrides", () => {
     assert.equal(canSpillForCapacity(extra), false);
   });
 
-  it("lets a dragged chore sit over the cap", () => {
+  it("spills a dragged chore when a pin already fills the cap", () => {
     const moved = chore({ held: true });
-    assert.equal(mayExceedCapacity(moved), true);
-    assert.equal(canSpillForCapacity(moved), false);
+    assert.equal(mayExceedCapacity(moved), false);
+    assert.equal(canSpillForCapacity(moved), true);
+  });
+
+  it("spills autos before a dragged chore", () => {
+    const auto = { ...chore({}), dirt: 1 };
+    const moved = { ...chore({ held: true }), dirt: 0.1 };
+    assert.deepEqual(
+      rankForSpill([moved, auto]).map((r) => r.dirt),
+      [1, 0.1],
+    );
   });
 
   it("lets exclusive important chores sit over the cap", () => {
