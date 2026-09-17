@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import {
   dirtAsOfDate,
   dirtAsOfForTask,
+  nextPresentDay,
   pausesDirtiness,
+  returnDay,
   uiDirtAsOf,
 } from "./vacation";
 
@@ -28,6 +30,12 @@ describe("vacation dirt pause", () => {
     assert.equal(asOf.toISOString().slice(0, 10), "2026-08-20");
     assert.equal(pausesDirtiness({ important: true }), false);
     assert.equal(uiDirtAsOf({ important: true }, new Date("2026-08-10T12:00:00")), undefined);
+  });
+
+  it("resumes the day after the house vacation ends", () => {
+    assert.equal(returnDay({ vacationOn: false }, house, "2026-08-20"), "2026-08-25");
+    assert.equal(nextPresentDay({ vacationOn: false }, house, "2026-08-20"), "2026-08-25");
+    assert.equal(nextPresentDay({ vacationOn: false }, house, "2026-08-25"), "2026-08-25");
   });
 
   it("uses the live clock for Important and regular chores when not paused", () => {

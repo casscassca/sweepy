@@ -3,7 +3,7 @@ import { encodeWeek, parseWeek } from "@/lib/capacity";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, generateWebhookSecret } from "@/lib/auth";
 import { scheduleHaMqttSync } from "@/lib/ha-mqtt";
-import { prepareAssignments } from "@/lib/scheduler";
+import { reshuffleFrom } from "@/lib/scheduler";
 import { ymd } from "@/lib/vacation";
 import { calendarDayStr } from "@/lib/dates";
 
@@ -73,7 +73,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     omit: { passwordHash: false, webhookSecret: false },
   });
   if (typeof body.vacationOn === "boolean" || body.vacationStart !== undefined || body.vacationEnd !== undefined) {
-    await prepareAssignments(calendarDayStr());
+    await reshuffleFrom(calendarDayStr(), 21, { keepHeld: true });
   }
   scheduleHaMqttSync();
   const { passwordHash, ...rest } = user;

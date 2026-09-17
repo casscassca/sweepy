@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { scheduleHaMqttSync } from "@/lib/ha-mqtt";
-import { prepareAssignments } from "@/lib/scheduler";
+import { prepareAssignments, reshuffleFrom } from "@/lib/scheduler";
 import { houseVacationActive, ymd } from "@/lib/vacation";
 import { calendarDayStr } from "@/lib/dates";
 
@@ -39,12 +39,19 @@ export async function PATCH(req: Request) {
   if (body.houseVacationEnd !== undefined) data.houseVacationEnd = ymd(body.houseVacationEnd);
   if (typeof body.pauseDirtiness === "boolean") data.pauseDirtiness = body.pauseDirtiness;
 
+  const vacationTouched =
+    typeof body.houseVacation === "boolean"
+    || body.houseVacationStart !== undefined
+    || body.houseVacationEnd !== undefined
+    || typeof body.pauseDirtiness === "boolean";
+
   const settings = await prisma.settings.upsert({
     where: { id: "singleton" },
     create: { id: "singleton", ...data },
     update: data,
   });
-  await prepareAssignments(calendarDayStr());
+  if (vacationTouched) await reshuffleFrom(calendarDayStr(), 21, { keepHeld: true });
+  else await prepareAssignments(calendarDayStr());
   scheduleHaMqttSync();
   const { sessionSecret, haUrl: _haUrl, haToken: _haToken, ...safe } = settings;
   return NextResponse.json(withDirtAsOf(safe));

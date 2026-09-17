@@ -16,7 +16,7 @@ import {
   type PersonCaps,
 } from "./capacity";
 import { canSpillForCapacity, rankForSpill } from "./capacity-policy";
-import { dirtAsOfForTask, personAway, returnDay } from "./vacation";
+import { dirtAsOfForTask, nextPresentDay, personAway, returnDay } from "./vacation";
 import { applyDirtPause, loadVacationContext } from "./vacation-db";
 import { isAllowedOnDate, nextAllowedOnOrAfter } from "./allowed-days";
 import { scheduleHaMqttSync } from "./ha-mqtt";
@@ -271,7 +271,11 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
         }
         const dest = nextAllowedOnOrAfter(
           spill.task.allowedDays,
-          overflowNextDate(date, person ? personWeekendOn(person) : false),
+          nextPresentDay(
+            person ?? { vacationOn: false },
+            vac.house,
+            overflowNextDate(date, person ? personWeekendOn(person) : false),
+          ),
         );
         if (!dest || dest === date) continue;
         await relocateOpen(spill.id, spill.taskId, dest);
@@ -357,16 +361,19 @@ async function applyVacation(day: string) {
       continue;
     }
 
+    if (!awayOnDate) continue;
+
     const stay = a.pinned || a.held || a.task.oneOff;
-    if (!stay && awayOnDate) {
+    if (!stay) {
       await prisma.dailyAssignment.delete({ where: { id: a.id } });
       dismiss.push(a.id);
       continue;
     }
-    if (!awayToday || a.date > day || !stay) continue;
-    const back = returnDay(person, house, day);
-    if (back && back > day) {
-      const landing = nextAllowedOnOrAfter(a.task.allowedDays, back) ?? back;
+
+    const back = returnDay(person, house, a.date);
+    if (back) {
+      const from = back > day ? back : day;
+      const landing = nextAllowedOnOrAfter(a.task.allowedDays, from) ?? from;
       await relocateOpen(a.id, a.taskId, landing, { held: true, parked: false });
     } else {
       await prisma.dailyAssignment.update({
@@ -474,7 +481,6 @@ async function placeDueOnlyOnDueDays(fromDate: string, horizon: number, onlyDate
     if (taken.has(task.id)) continue;
     let date = dueOnAllowedDay(task.lastDoneAt, task.frequencyDays, task.allowedDays, fromDate, until);
     if (!date) continue;
-    if (onlyDate && date !== onlyDate) continue;
 
     const exclusive = task.assignableUsers.length === 1;
     const mustOver = task.important && exclusive;
@@ -490,7 +496,24 @@ async function placeDueOnlyOnDueDays(fromDate: string, horizon: number, onlyDate
       });
 
     let allowed = allowedOn(date);
-    if (allowed.length === 0) continue;
+    if (allowed.length === 0) {
+      const pool = task.assignableUsers.length > 0
+        ? task.assignableUsers.map((au) => au.userId)
+        : users.map((u) => u.id);
+      let landing: string | null = null;
+      for (const uid of pool) {
+        const person = users.find((u) => u.id === uid);
+        if (!person) continue;
+        const present = nextPresentDay(person, vac.house, date);
+        const next = nextAllowedOnOrAfter(task.allowedDays, present) ?? present;
+        if (!landing || next < landing) landing = next;
+      }
+      if (!landing) continue;
+      date = landing;
+      allowed = allowedOn(date);
+      if (allowed.length === 0) continue;
+    }
+    if (onlyDate && date !== onlyDate) continue;
 
     const pick = async (day: string, ids: string[]) => {
       let bestUser: string | null = null;

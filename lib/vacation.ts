@@ -49,6 +49,22 @@ export function returnDay(person: VacationRange, house: HouseVacation, day: stri
   return null;
 }
 
+/** First calendar day on or after `from` when this person is home. */
+export function nextPresentDay(
+  person: VacationRange,
+  house: HouseVacation,
+  from: string,
+  horizon = 60,
+): string {
+  let day = from;
+  for (let i = 0; i < horizon; i++) {
+    if (!personAway(person, house, day)) return day;
+    const back = returnDay(person, house, day);
+    day = back && back > day ? back : addCalendarDays(day, 1);
+  }
+  return from;
+}
+
 export function dirtAsOfDate(house: HouseVacation, day: string): Date {
   if (houseVacationActive(house, day) && house.pauseDirtiness && house.dirtFrozenOn) {
     return new Date(`${house.dirtFrozenOn}T12:00:00`);

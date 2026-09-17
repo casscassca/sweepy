@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Pencil, Trash2, Plus, KeyRound, RefreshCw, Check, Copy, Bell, ScrollText, TreePalm } from "lucide-react";
 import { encodeWeek, parseWeek } from "@/lib/capacity";
 import { calendarDayStr } from "@/lib/dates";
-import { invalidateApi, loadJson } from "@/lib/api-cache";
+import { invalidateApi, invalidateLists, loadJson } from "@/lib/api-cache";
 import { houseVacationActive, vacationActive } from "@/lib/vacation";
 
 type User = {
@@ -326,6 +326,7 @@ export default function UsersPage() {
       body: JSON.stringify(next),
     });
     invalidateApi("/api/settings", "/api/load");
+    invalidateLists();
   }
 
   const today = calendarDayStr();
