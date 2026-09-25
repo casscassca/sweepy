@@ -17,7 +17,7 @@ import {
 } from "./capacity";
 import { canSpillForCapacity, rankForSpill } from "./capacity-policy";
 import { dirtAsOfForTask, nextPresentDay, personAway, returnDay } from "./vacation";
-import { applyDirtPause, loadVacationContext } from "./vacation-db";
+import { applyDirtPause, expireHouseVacation, loadVacationContext } from "./vacation-db";
 import { isAllowedOnDate, nextAllowedOnOrAfter } from "./allowed-days";
 import { scheduleHaMqttSync } from "./ha-mqtt";
 import { addDays, format, parseISO } from "date-fns";
@@ -325,6 +325,7 @@ export async function prepareAssignments(notBefore = todayStr()) {
   });
   await previous;
   try {
+    await expireHouseVacation(notBefore);
     await applyDirtPause(notBefore);
     await applyVacation(notBefore);
     const duplicates = await dedupeOpenAssignments();

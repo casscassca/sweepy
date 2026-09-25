@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { scheduleHaMqttSync } from "@/lib/ha-mqtt";
 import { prepareAssignments, reshuffleFrom } from "@/lib/scheduler";
-import { houseVacationActive, ymd } from "@/lib/vacation";
+import { houseVacationActive, houseVacationExpired, ymd } from "@/lib/vacation";
 import { calendarDayStr } from "@/lib/dates";
 
 function withDirtAsOf<T extends {
@@ -20,11 +20,15 @@ function withDirtAsOf<T extends {
 }
 
 export async function GET() {
-  const settings = await prisma.settings.upsert({
+  let settings = await prisma.settings.upsert({
     where: { id: "singleton" },
     create: { id: "singleton" },
     update: {},
   });
+  if (houseVacationExpired(settings, calendarDayStr())) {
+    await prepareAssignments(calendarDayStr());
+    settings = await prisma.settings.findUniqueOrThrow({ where: { id: "singleton" } });
+  }
   const { sessionSecret, haUrl: _haUrl, haToken: _haToken, ...safe } = settings;
   return NextResponse.json(withDirtAsOf(safe));
 }

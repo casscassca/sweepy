@@ -35,6 +35,10 @@ export function houseVacationActive(house: HouseVacation, day: string): boolean 
   }, day);
 }
 
+export function houseVacationExpired(house: HouseVacation, day: string): boolean {
+  return house.houseVacation && !!house.houseVacationEnd && day > house.houseVacationEnd;
+}
+
 export function personAway(person: VacationRange, house: HouseVacation, day: string): boolean {
   return houseVacationActive(house, day) || vacationActive(person, day);
 }

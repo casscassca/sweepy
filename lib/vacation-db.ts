@@ -1,7 +1,7 @@
 import { addDays } from "date-fns";
 import { calendarDaysBetween } from "./dates";
 import { prisma } from "./prisma";
-import { dirtAsOfDate, houseVacationActive, pausesDirtiness, personAway, type HouseVacation } from "./vacation";
+import { dirtAsOfDate, houseVacationActive, houseVacationExpired, pausesDirtiness, personAway, type HouseVacation } from "./vacation";
 
 const HOUSE_SELECT = {
   houseVacation: true,
@@ -30,6 +30,16 @@ export async function loadVacationContext(day: string) {
   ]);
   const awayIds = new Set(users.filter((u) => personAway(u, house, day)).map((u) => u.id));
   return { house, users, awayIds, dirtAsOf: dirtAsOfDate(house, day) };
+}
+
+export async function expireHouseVacation(day: string) {
+  const house = await loadHouseVacation();
+  if (!houseVacationExpired(house, day)) return false;
+  await prisma.settings.update({
+    where: { id: "singleton" },
+    data: { houseVacation: false, pauseDirtiness: false },
+  });
+  return true;
 }
 
 export async function applyDirtPause(day: string) {
