@@ -17,6 +17,10 @@ export function canSpillForCapacity(row: CapacityRow) {
   return !mayExceedCapacity(row);
 }
 
+export function keepsDueDay(row: CapacityRow) {
+  return row.task.important === true;
+}
+
 export function rankForSpill<T extends CapacityRow & { dirt: number }>(rows: T[]) {
   return [...rows].sort((a, b) => {
     if (a.held !== b.held) return a.held ? 1 : -1;

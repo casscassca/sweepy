@@ -15,7 +15,7 @@ import {
   weekendPair,
   type PersonCaps,
 } from "./capacity";
-import { canSpillForCapacity, rankForSpill } from "./capacity-policy";
+import { canSpillForCapacity, keepsDueDay, rankForSpill } from "./capacity-policy";
 import { dirtAsOfForTask, nextPresentDay, personAway, returnDay } from "./vacation";
 import { applyDirtPause, expireHouseVacation, loadVacationContext } from "./vacation-db";
 import { isAllowedOnDate, nextAllowedOnOrAfter } from "./allowed-days";
@@ -269,6 +269,7 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
           usedTasks -= 1;
           continue;
         }
+        if (keepsDueDay(spill)) continue;
         const dest = nextAllowedOnOrAfter(
           spill.task.allowedDays,
           nextPresentDay(
@@ -483,8 +484,7 @@ async function placeDueOnlyOnDueDays(fromDate: string, horizon: number, onlyDate
     let date = dueOnAllowedDay(task.lastDoneAt, task.frequencyDays, task.allowedDays, fromDate, until);
     if (!date) continue;
 
-    const exclusive = task.assignableUsers.length === 1;
-    const mustOver = task.important && exclusive;
+    const mustOver = task.important;
     const difficulty = displayTaskDifficulty(task, dirtAsOfForTask(vac.house, fromDate, task));
 
     const allowedOn = (day: string) =>
@@ -796,8 +796,8 @@ export async function runDailyAssignment(
     }
   };
 
-  place(eligible.filter((e) => e.important && e.exclusive), true);
-  place(eligible.filter((e) => !(e.important && e.exclusive)), false);
+  place(eligible.filter((e) => e.important), true);
+  place(eligible.filter((e) => !e.important), false);
 
   if (toCreate.length > 0) {
     await prisma.dailyAssignment.createMany({ data: toCreate });

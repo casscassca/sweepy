@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { canSpillForCapacity, mayExceedCapacity, rankForSpill } from "./capacity-policy";
+import { canSpillForCapacity, keepsDueDay, mayExceedCapacity, rankForSpill } from "./capacity-policy";
 
 const chore = (over: Partial<{ pinned: boolean; held: boolean; exclusive: boolean; oneOff: boolean; important: boolean }>) => ({
   pinned: over.pinned ?? false,
@@ -41,6 +41,12 @@ describe("capacity overrides", () => {
     const onlyTheirs = chore({ important: true, exclusive: true });
     assert.equal(mayExceedCapacity(onlyTheirs), true);
     assert.equal(canSpillForCapacity(onlyTheirs), false);
+  });
+
+  it("keeps an important chore on its due day when nobody else has room", () => {
+    assert.equal(keepsDueDay(chore({ important: true })), true);
+    assert.equal(keepsDueDay(chore({ important: true, exclusive: true })), true);
+    assert.equal(keepsDueDay(chore({})), false);
   });
 
   it("spills a regular or due-only auto once the cap is hit", () => {
