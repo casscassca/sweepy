@@ -13,7 +13,7 @@ services:
     ports:
       - "${SWEEPY_PORT:-3000}:3000"
     volumes:
-      - sweepy-data:/app/data
+      - ./data:/app/data
     environment:
       TZ: ${TZ:-America/Chicago}
     restart: unless-stopped
