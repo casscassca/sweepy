@@ -92,10 +92,12 @@ model DailyAssignment {
   completedAt   DateTime?
   completedById String?
   remindAt      DateTime?
-  // True when someone put it on this day (drag, Tomorrow). Survives auto top-up
-  // and can push a day over capacity. Re-assign still forgets it unless pinned.
+  // True when someone put it on this day (drag, Tomorrow). Beats ordinary autos,
+  // but slides forward when pins or important chores already fill the day.
+  // Re-assign still forgets it unless pinned.
   held          Boolean   @default(false)
-  // Stays on this day through Re-assign. Outranks one-offs when a day is stuffed.
+  // Stays on this day through Re-assign until it's done. A day-restricted chore
+  // jumps to the next allowed day instead of following through the week.
   pinned        Boolean   @default(false)
   parked        Boolean   @default(false)
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)

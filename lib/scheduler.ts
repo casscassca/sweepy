@@ -36,6 +36,19 @@ async function relocateOpen(
     where: { date_taskId: { date, taskId } },
   });
   if (clash && clash.id !== id) {
+    const moving = await prisma.dailyAssignment.findUnique({
+      where: { id },
+      select: { pinned: true, held: true },
+    });
+    if (moving?.pinned || moving?.held) {
+      await prisma.dailyAssignment.update({
+        where: { id: clash.id },
+        data: {
+          pinned: clash.pinned || moving.pinned,
+          held: clash.held || moving.held,
+        },
+      });
+    }
     await prisma.dailyAssignment.delete({ where: { id } });
     return;
   }
@@ -171,8 +184,9 @@ async function handOffToSomeoneWithRoom(opts: {
 
 /**
  * Every row on the day counts, including pins, one-offs, and completed work.
- * One-offs and exclusive important chores may sit over the cap; dragged chores
- * displace autos but still overflow when a pin already fills the seat.
+ * Pins, one-offs, and important chores may sit over the cap. Dragged chores
+ * beat ordinary autos, but slide forward when pins or important chores already
+ * fill the day. Ordinary autos never stay over the cap.
  */
 export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
   const users = await prisma.user.findMany({
@@ -254,16 +268,20 @@ export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
       while ((usedPts > limitPts || usedTasks > limitTasks) && idx < ranked.length) {
         const spill = ranked[idx++];
         const difficulty = displayTaskDifficulty(spill.task, spill.taskAsOf);
-        const handed = await handOffToSomeoneWithRoom({
-          assignmentId: spill.id,
-          date,
-          fromUserId: userId,
-          allowedDays: spill.task.allowedDays,
-          assignableUserIds: spill.task.assignableUsers.map((au) => au.userId),
-          difficulty,
-          users,
-          house: vac.house,
-        });
+        // A manual move belongs on this person's day. If it has to leave, it
+        // slides forward instead of being handed to someone else.
+        const handed = spill.held
+          ? false
+          : await handOffToSomeoneWithRoom({
+            assignmentId: spill.id,
+            date,
+            fromUserId: userId,
+            allowedDays: spill.task.allowedDays,
+            assignableUserIds: spill.task.assignableUsers.map((au) => au.userId),
+            difficulty,
+            users,
+            house: vac.house,
+          });
         if (handed) {
           usedPts -= difficulty;
           usedTasks -= 1;
@@ -333,8 +351,8 @@ export async function prepareAssignments(notBefore = todayStr()) {
     const rolled = await rollForwardPastAssignments(notBefore);
     const dropped = await dropCleanUnheldAssignments();
     await snapDueOnlyToDueDay(notBefore);
-    await enforceCapacity(notBefore);
     await snapToAllowedDays(notBefore);
+    await enforceCapacity(notBefore);
     await applyVacation(notBefore);
     return { duplicates, rolled, dropped };
   } finally {
@@ -408,7 +426,7 @@ async function snapDueOnlyToDueDay(fromDate = todayStr(), horizon = 21) {
 
 async function snapToAllowedDays(fromDate = todayStr()) {
   const open = await prisma.dailyAssignment.findMany({
-    where: { completedAt: null, parked: false, pinned: false, held: false, task: { oneOff: false } },
+    where: { completedAt: null, parked: false, task: { oneOff: false } },
     include: { task: { select: { allowedDays: true } } },
   });
   for (const a of open) {

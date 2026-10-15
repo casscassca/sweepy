@@ -9,7 +9,7 @@ export function startCron() {
   started = true;
 
   // Midnight: re-pick auto chores for the next few weeks so dirtier / important
-  // work floats up. Pins, manual moves, and one-offs stay put.
+  // work floats up. Pins and one-offs stay put. Manual moves stay unless the day is already full.
   cron.schedule("0 0 * * *", async () => {
     console.log("[cron] Refreshing auto assignments...");
     const result = await reshuffleFrom(undefined, 21, { keepHeld: true });

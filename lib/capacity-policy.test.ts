@@ -37,9 +37,12 @@ describe("capacity overrides", () => {
     );
   });
 
-  it("lets exclusive important chores sit over the cap", () => {
+  it("lets important chores sit over the cap, shared or exclusive", () => {
+    const shared = chore({ important: true });
     const onlyTheirs = chore({ important: true, exclusive: true });
+    assert.equal(mayExceedCapacity(shared), true);
     assert.equal(mayExceedCapacity(onlyTheirs), true);
+    assert.equal(canSpillForCapacity(shared), false);
     assert.equal(canSpillForCapacity(onlyTheirs), false);
   });
 
@@ -49,9 +52,9 @@ describe("capacity overrides", () => {
     assert.equal(keepsDueDay(chore({})), false);
   });
 
-  it("spills a regular or due-only auto once the cap is hit", () => {
+  it("spills a regular auto once the cap is hit and keeps important chores", () => {
     assert.equal(canSpillForCapacity(chore({})), true);
-    assert.equal(canSpillForCapacity(chore({ important: true })), true);
+    assert.equal(canSpillForCapacity(chore({ important: true })), false);
     assert.equal(canSpillForCapacity(chore({ exclusive: true })), true);
   });
 
@@ -62,6 +65,15 @@ describe("capacity overrides", () => {
     assert.deepEqual(
       rankForSpill([important, dirty, clean]).map((r) => r.dirt),
       [0.5, 2, 0.4],
+    );
+  });
+
+  it("spills a dragged chore before an important one", () => {
+    const moved = { ...chore({ held: true }), dirt: 0.2 };
+    const important = { ...chore({ important: true }), dirt: 2 };
+    assert.deepEqual(
+      rankForSpill([important, moved]).map((r) => r.dirt),
+      [0.2, 2],
     );
   });
 });
