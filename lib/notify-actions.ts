@@ -1,19 +1,20 @@
-import { addDays, addHours, format } from "date-fns";
+import { addHours } from "date-fns";
 import { addCalendarDays, calendarDayStr } from "./dates";
 import { prisma } from "./prisma";
 import { completeAssignment } from "./complete";
 import { appendIntegrationLog } from "./integration-log";
-import { dismissAssignmentNotify, fillUserTodayAndNotify, holdAssignmentOnDate } from "./scheduler";
+import { dismissAssignmentNotify, holdAssignmentOnDate } from "./scheduler";
 
-export type NotifyActionKind = "done" | "tomorrow" | "yesterday" | "later";
+export type NotifyActionKind = "done" | "tomorrow" | "later";
+
+const DELAY_HOURS = 3;
 
 export function parseNotifyAction(action: string): { kind: NotifyActionKind; assignmentId: string } | null {
   const rules: Array<{ prefix: string; kind: NotifyActionKind }> = [
     { prefix: "MARK_DONE_", kind: "done" },
     { prefix: "DONE_", kind: "done" },
     { prefix: "DEFER_", kind: "tomorrow" },
-    { prefix: "YDAY_", kind: "yesterday" },
-    { prefix: "YEST_", kind: "yesterday" },
+    { prefix: "DELAY_", kind: "later" },
     { prefix: "WAIT_", kind: "later" },
     { prefix: "LATER_", kind: "later" },
   ];
@@ -133,30 +134,8 @@ export async function applyNotifyAction(opts: {
     return { ok: true as const, deferred: true };
   }
 
-  if (parsed.kind === "yesterday") {
-    const date = format(addDays(new Date(), -1), "yyyy-MM-dd");
-    const completedAt = new Date(`${date}T12:00:00`);
-    const completed = await completeAssignment({
-      assignmentId: assignment.id,
-      completedById: actorId,
-      completedAt,
-      date,
-    });
-    if (completed.ok && "alreadyDone" in completed && completed.alreadyDone) {
-      return { ok: true as const, alreadyDone: true };
-    }
-    const pulled = await fillUserTodayAndNotify(assignment.userId);
-    await appendIntegrationLog({
-      kind: "webhook",
-      ok: true,
-      userName: actorName,
-      summary: `${actorName} marked ${assignment.task.name} done yesterday${pulled > 0 ? ` · pulled ${pulled} more` : ""}`,
-      detail: opts.source,
-    });
-    return { ok: true as const, yesterday: true, pulled };
-  }
-
-  const remindAt = addHours(new Date(), 1);
+  const remindAt = addHours(new Date(), DELAY_HOURS);
+  await dismissAssignmentNotify(assignment.id);
   await prisma.dailyAssignment.update({
     where: { id: assignment.id },
     data: { remindAt },
@@ -165,7 +144,7 @@ export async function applyNotifyAction(opts: {
     kind: "webhook",
     ok: true,
     userName: actorName,
-    summary: `${actorName} snoozed ${assignment.task.name} for 1 hour`,
+    summary: `${actorName} delayed ${assignment.task.name} for ${DELAY_HOURS} hours`,
     detail: opts.source,
   });
   return { ok: true as const, later: true, remindAt: remindAt.toISOString() };

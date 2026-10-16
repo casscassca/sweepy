@@ -128,7 +128,7 @@ export default function SettingsPage() {
             </p>
             <p className="text-sm" style={{ color: ha.listening ? "var(--green)" : "var(--text3)" }}>
               {ha.listening
-                ? "Listening for Done / Tomorrow / Yesterday taps"
+                ? "Listening for Done / Tomorrow / Delay taps"
                 : ha.listenError ?? "Not listening for button taps yet"}
             </p>
             <p className="text-sm" style={{ color: ha.mqtt?.connected ? "var(--green)" : "var(--text3)" }}>
@@ -169,7 +169,7 @@ export default function SettingsPage() {
         </button>
         {showLog && (
           !ha || ha.log.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--text3)" }}>Nothing yet. Bell on People and Done / Tomorrow / Yesterday taps show up here.</p>
+            <p className="text-sm" style={{ color: "var(--text3)" }}>Nothing yet. Bell on People and Done / Tomorrow / Delay taps show up here.</p>
           ) : (
             <ul className="space-y-2">
               {ha.log.map((row) => (
@@ -212,7 +212,7 @@ export default function SettingsPage() {
           <div className="space-y-3">
             <p className="text-sm" style={{ color: "var(--text2)" }}>
               The house connection is <code className="text-xs">HA_URL</code> and <code className="text-xs">HA_TOKEN</code> in the Pi <code className="text-xs">.env</code>, one token for everyone.
-              Sweepy listens for the notification buttons on that connection, so you do not need a Home Assistant automation for Done / Tomorrow / Yesterday.
+              Sweepy listens for the notification buttons on that connection, so you do not need a Home Assistant automation for Done / Tomorrow / Delay.
             </p>
             <p className="text-sm" style={{ color: "var(--text2)" }}>
               Chore sensors use the same Mosquitto broker as Zigbee, no login. Set <code className="text-xs">MQTT_URL</code> in that same <code className="text-xs">.env</code>. Rooms show up as Home Assistant devices with a cleanliness % and each catalog chore as a dirt sensor.
@@ -264,9 +264,9 @@ export default function SettingsPage() {
           <ul className="space-y-2 mt-3">
             {[
               "At midnight, auto-picks are refreshed for the next few weeks so dirtier and important chores float up. Pins and one-offs stay put. Something you moved by hand stays unless pins or important chores already fill that day",
-              "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Yesterday. The bell on People clears their phone first, then resends from today's list",
+              "At each person's notify time, one push notification fires per task with Done, Tomorrow, and Delay. The bell on People clears their phone first, then resends from today's list",
               "If they set a resend time, leftover banners are wiped at that time and any still-open chores go out again",
-              "Done checks it off today. Tomorrow moves it to the next day. Yesterday moves it to yesterday and checks it off, and pulls in one more chore only if there is still room under today's cap",
+              "Done checks it off today. Tomorrow moves it to the next day. Delay clears the banner and brings that chore's notification back 3 hours later",
               "Tasks can be checked off or deferred in the Today and Upcoming views too",
               "Pins, one-offs, and important chores stay even when that goes over someone's daily max, and unfinished important chores keep stacking until they're done. A chore that only falls on certain days, like the bins, comes back the next week instead of following you every day. Anything you moved by hand beats ordinary chores, but slides forward when pins or important chores already fill the day. Ordinary chores never go over the max",
             ].map((line) => (

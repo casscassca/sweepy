@@ -1018,7 +1018,7 @@ export async function sendNotificationsForUser(
       message: `${difficulty} · tap an action below`,
     };
     // Short action ids — iOS / companion historically cap identifiers around 32 chars.
-    // cuid() is 25; DONE_ + id = 30, DEFER_ + id = 31, YDAY_ + id = 30.
+    // cuid() is 25. DONE_ + id = 30, DEFER_ + id = 31, DELAY_ + id = 31.
     const withActions = {
       ...base,
       data: {
@@ -1029,7 +1029,7 @@ export async function sendNotificationsForUser(
         actions: [
           { action: `DONE_${assignment.id}`, title: "Done" },
           { action: `DEFER_${assignment.id}`, title: "Tomorrow" },
-          { action: `YDAY_${assignment.id}`, title: "Yesterday" },
+          { action: `DELAY_${assignment.id}`, title: "Delay" },
         ],
       },
     };
@@ -1077,84 +1077,6 @@ export async function sendNotificationsForUser(
   await prisma.user.update({ where: { id: user.id }, data: { notifyTags: nextTags.join(",") } });
 
   return { ok: errors.length === 0, sent, cleared, reason: errors[0] ?? resolved.hint, errors, attempts };
-}
-
-/** If this person is still under today's cap, add the next due chore and ping them. */
-export async function fillUserTodayAndNotify(userId: string) {
-  const date = todayStr();
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      dailyCapacity: true,
-      dailyTaskLimit: true,
-      weekdayCapacities: true,
-      weekdayTaskLimits: true,
-      weekendShare: true,
-      weekendCapacity: true,
-      weekendTaskLimit: true,
-      vacationOn: true,
-      vacationStart: true,
-      vacationEnd: true,
-    },
-  });
-  if (!user) return 0;
-  const vac = await loadVacationContext(date);
-  if (personAway(user, vac.house, date)) return 0;
-
-  const rem = await remainingOnDate(date, user.id, user, { pts: 0, tasks: 0 });
-  if (rem.tasks < 1 || rem.pts < 1) return 0;
-  const pointsLeft = rem.pts;
-
-  const addedId = await assignNextForUser(user.id, date, pointsLeft);
-  if (!addedId) return 0;
-  await sendNotificationsForUser(userId, date, [addedId]);
-  return 1;
-}
-
-async function assignNextForUser(userId: string, date: string, pointsLeft: number) {
-  const targetDate = new Date(`${date}T12:00:00`);
-  const [tasks, existing, openElsewhere] = await Promise.all([
-    prisma.task.findMany({
-      where: { oneOff: false },
-      include: { assignableUsers: true },
-    }),
-    prisma.dailyAssignment.findMany({
-      where: { date, parked: false },
-    }),
-    prisma.dailyAssignment.findMany({
-      where: { completedAt: null, date: { not: date } },
-      select: { taskId: true },
-    }),
-  ]);
-  const taken = new Set(existing.map((a) => a.taskId));
-  const blocked = new Set(openElsewhere.map((a) => a.taskId));
-  const lastOrder = existing
-    .filter((a) => a.userId === userId)
-    .reduce((max, a) => Math.max(max, a.order), -1);
-
-  const next = tasks
-    .filter((t) => !taken.has(t.id) && !blocked.has(t.id))
-    .filter((t) => isAllowedOnDate(t.allowedDays, date))
-    .filter((t) => t.assignableUsers.length === 0 || t.assignableUsers.some((au) => au.userId === userId))
-    .map((t) => ({
-      task: t,
-      dirt: dirtinessRatio(t.lastDoneAt, t.frequencyDays, targetDate),
-      exclusive: t.assignableUsers.length === 1,
-    }))
-    .filter(({ task }) => isTaskEligible(task, targetDate) && displayTaskDifficulty(task, targetDate) <= pointsLeft)
-    .sort((a, b) => {
-      if (a.task.dueOnly !== b.task.dueOnly) return a.task.dueOnly ? -1 : 1;
-      if (a.task.important !== b.task.important) return a.task.important ? -1 : 1;
-      if (a.exclusive !== b.exclusive) return a.exclusive ? -1 : 1;
-      return b.dirt - a.dirt;
-    })[0];
-
-  if (!next) return null;
-  const created = await prisma.dailyAssignment.create({
-    data: { date, userId, taskId: next.task.id, order: lastOrder + 1 },
-  });
-  return created.id;
 }
 
 export async function sendDueReminders() {
