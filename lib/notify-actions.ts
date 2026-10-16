@@ -2,7 +2,7 @@ import { addDays, addHours, format } from "date-fns";
 import { prisma } from "./prisma";
 import { completeAssignment } from "./complete";
 import { appendIntegrationLog } from "./integration-log";
-import { fillUserTodayAndNotify, holdAssignmentOnDate } from "./scheduler";
+import { dismissAssignmentNotify, fillUserTodayAndNotify, holdAssignmentOnDate } from "./scheduler";
 
 export type NotifyActionKind = "done" | "tomorrow" | "yesterday" | "later";
 
@@ -56,16 +56,44 @@ export async function applyNotifyAction(opts: {
   const actor = await prisma.user.findUnique({ where: { id: actorId } });
   const actorName = actor?.name ?? assignment.user.name;
 
-  if (assignment.completedAt) {
-    return { ok: true as const, alreadyDone: true };
-  }
-
   if (parsed.kind === "done") {
-    await completeAssignment({
+    if (assignment.completedAt) {
+      void dismissAssignmentNotify(assignment.id);
+      await appendIntegrationLog({
+        kind: "webhook",
+        ok: true,
+        userName: actorName,
+        summary: `${actorName} tapped Done on ${assignment.task.name} — already complete`,
+        detail: opts.source,
+      });
+      return { ok: true as const, alreadyDone: true };
+    }
+    const completed = await completeAssignment({
       assignmentId: assignment.id,
       completedById: actorId,
       completedAt: new Date(),
     });
+    if (!completed.ok) {
+      await appendIntegrationLog({
+        kind: "webhook",
+        ok: false,
+        userName: actorName,
+        summary: `${actorName} could not mark ${assignment.task.name} done`,
+        detail: completed.reason,
+      });
+      return completed;
+    }
+    if ("alreadyDone" in completed && completed.alreadyDone) {
+      void dismissAssignmentNotify(assignment.id);
+      await appendIntegrationLog({
+        kind: "webhook",
+        ok: true,
+        userName: actorName,
+        summary: `${actorName} tapped Done on ${assignment.task.name} — already complete`,
+        detail: opts.source,
+      });
+      return { ok: true as const, alreadyDone: true };
+    }
     await appendIntegrationLog({
       kind: "webhook",
       ok: true,
@@ -74,6 +102,10 @@ export async function applyNotifyAction(opts: {
       detail: opts.source,
     });
     return { ok: true as const, completedBy: actorName };
+  }
+
+  if (assignment.completedAt) {
+    return { ok: true as const, alreadyDone: true };
   }
 
   if (parsed.kind === "tomorrow") {
@@ -92,12 +124,15 @@ export async function applyNotifyAction(opts: {
   if (parsed.kind === "yesterday") {
     const date = format(addDays(new Date(), -1), "yyyy-MM-dd");
     const completedAt = new Date(`${date}T12:00:00`);
-    await completeAssignment({
+    const completed = await completeAssignment({
       assignmentId: assignment.id,
       completedById: actorId,
       completedAt,
       date,
     });
+    if (completed.ok && "alreadyDone" in completed && completed.alreadyDone) {
+      return { ok: true as const, alreadyDone: true };
+    }
     const pulled = await fillUserTodayAndNotify(assignment.userId);
     await appendIntegrationLog({
       kind: "webhook",

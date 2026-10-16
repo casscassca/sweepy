@@ -1,6 +1,14 @@
 /** Household calendar — due days follow Chicago, not the server’s UTC clock. */
 export const HOUSEHOLD_TZ = "America/Chicago";
 
+/** Keep the later of two instants. A second completion must not rewind the first. */
+export function laterInstant(existing: Date | string | null | undefined, next: Date): Date {
+  if (!existing) return next;
+  const current = existing instanceof Date ? existing : new Date(existing);
+  if (Number.isNaN(current.getTime())) return next;
+  return current.getTime() > next.getTime() ? current : next;
+}
+
 export function calendarDayStr(value: Date | string = new Date(), timeZone = HOUSEHOLD_TZ): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,

@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { laterInstant } from "./dates";
 import { isAddon2Due, isAddonDue } from "./addon";
 import { publishHaMqttTaskEvent, scheduleHaMqttSync } from "./ha-mqtt";
 import {
@@ -20,10 +21,12 @@ export async function completeAssignment(opts: {
   let id = opts.assignmentId;
   const current = await prisma.dailyAssignment.findUnique({ where: { id } });
   if (!current) return { ok: false as const, status: 404 as const, reason: "not found" };
+  if (current.completedAt) return { ok: true as const, assignment: current, alreadyDone: true as const };
 
   if (opts.date && opts.date !== current.date) {
     const moved = await holdAssignmentOnDate(id, opts.date, { respectAllowed: false });
     if (!moved) return { ok: false as const, status: 404 as const, reason: "not found" };
+    if (moved.completedAt) return { ok: true as const, assignment: moved, alreadyDone: true as const };
     id = moved.id;
   }
 
@@ -47,9 +50,9 @@ export async function completeAssignment(opts: {
   await prisma.task.update({
     where: { id: assignment.taskId },
     data: {
-      lastDoneAt: opts.completedAt,
-      ...(mopped && { addonLastDoneAt: opts.completedAt }),
-      ...(stacked && { addon2LastDoneAt: opts.completedAt }),
+      lastDoneAt: laterInstant(task?.lastDoneAt, opts.completedAt),
+      ...(mopped && { addonLastDoneAt: laterInstant(task?.addonLastDoneAt, opts.completedAt) }),
+      ...(stacked && { addon2LastDoneAt: laterInstant(task?.addon2LastDoneAt, opts.completedAt) }),
     },
   });
 
