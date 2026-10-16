@@ -1,4 +1,5 @@
 import { addDays, addHours, format } from "date-fns";
+import { addCalendarDays, calendarDayStr } from "./dates";
 import { prisma } from "./prisma";
 import { completeAssignment } from "./complete";
 import { appendIntegrationLog } from "./integration-log";
@@ -109,8 +110,19 @@ export async function applyNotifyAction(opts: {
   }
 
   if (parsed.kind === "tomorrow") {
-    const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
-    await holdAssignmentOnDate(assignment.id, tomorrow);
+    const tomorrow = addCalendarDays(calendarDayStr(new Date()), 1);
+    await dismissAssignmentNotify(assignment.id);
+    const moved = await holdAssignmentOnDate(assignment.id, tomorrow, { respectAllowed: false });
+    if (!moved) {
+      await appendIntegrationLog({
+        kind: "webhook",
+        ok: false,
+        userName: actorName,
+        summary: `${actorName} could not move ${assignment.task.name} to tomorrow`,
+        detail: opts.source,
+      });
+      return { ok: false as const, status: 404, reason: "not found" };
+    }
     await appendIntegrationLog({
       kind: "webhook",
       ok: true,

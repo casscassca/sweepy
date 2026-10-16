@@ -426,7 +426,7 @@ async function snapDueOnlyToDueDay(fromDate = todayStr(), horizon = 21) {
 
 async function snapToAllowedDays(fromDate = todayStr()) {
   const open = await prisma.dailyAssignment.findMany({
-    where: { completedAt: null, parked: false, task: { oneOff: false } },
+    where: { completedAt: null, parked: false, held: false, task: { oneOff: false } },
     include: { task: { select: { allowedDays: true } } },
   });
   for (const a of open) {
@@ -610,7 +610,7 @@ export async function holdAssignmentOnDate(id: string, date: string, opts?: { re
   }
   const assignment = await prisma.dailyAssignment.update({
     where: { id },
-    data: { date: landing, held: true, remindAt: null },
+    data: { date: landing, held: true, remindAt: null, pinned: current.pinned },
   });
   return assignment;
 }
