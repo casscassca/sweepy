@@ -4,10 +4,8 @@ import { isAddon2Due, isAddonDue } from "./addon";
 import { publishHaMqttTaskEvent, scheduleHaMqttSync } from "./ha-mqtt";
 import {
   isFilterAddonTask,
-  isFilterNamedTask,
   previousFilterLastDone,
   syncRfidDesiccantOnFilterComplete,
-  syncRfidDesiccantOnFilterUndo,
 } from "./petlibro";
 import { prisma } from "./prisma";
 import { addTaskToDate, dismissAssignmentNotify, holdAssignmentOnDate } from "./scheduler";
@@ -163,13 +161,6 @@ export async function uncompleteFromLog(logId: string) {
       where: { id: assignment.id },
       data: { completedAt: null, completedById: null },
     });
-  }
-
-  if (isLatest && task && (isFilterNamedTask(task) || stacked)) {
-    void syncRfidDesiccantOnFilterUndo(
-      task,
-      isFilterNamedTask(task) ? previous?.completedAt ?? null : previousFilter,
-    );
   }
 
   scheduleHaMqttSync();

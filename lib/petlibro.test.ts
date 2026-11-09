@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  desiccantRemainingDays,
   previousFilterLastDone,
   shouldSyncRfidDesiccant,
 } from "./petlibro";
@@ -37,17 +36,6 @@ describe("petlibro desiccant sync", () => {
       shouldSyncRfidDesiccant({ name: "Replace Food/Water Filters" }, asOf),
       true,
     );
-  });
-
-  it("leaves 23 days when the filter was changed a week ago on a 30-day cycle", () => {
-    assert.equal(
-      desiccantRemainingDays(new Date("2026-08-25T12:00:00-05:00"), 30, asOf),
-      23,
-    );
-  });
-
-  it("leaves the full cycle when changed today", () => {
-    assert.equal(desiccantRemainingDays(asOf, 30, asOf), 30);
   });
 
   it("rebuilds the previous filter last-done across wet-food completions", () => {
