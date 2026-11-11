@@ -5,8 +5,15 @@ import { haEventStatus } from "@/lib/ha-events";
 import { haMqttStatus } from "@/lib/ha-mqtt";
 
 export async function GET() {
-  const ha = haConfig();
+  const events = haEventStatus();
   const mqtt = haMqttStatus();
+  const listener = {
+    listening: events.listening,
+    lastEventAt: events.lastEventAt,
+    listenError: events.lastError,
+    listenPhase: events.phase,
+  };
+  const ha = haConfig();
   const log = prisma.integrationLog
     ? await prisma.integrationLog.findMany({
         orderBy: { createdAt: "desc" },
@@ -25,6 +32,7 @@ export async function GET() {
       people: [],
       log,
       mqtt,
+      ...listener,
     });
   }
 
@@ -47,14 +55,11 @@ export async function GET() {
     };
   });
 
-  const events = haEventStatus();
   return NextResponse.json({
     configured: true,
     url: ha.url,
     reachable: catalog.reachable,
-    listening: events.listening,
-    lastEventAt: events.lastEventAt,
-    listenError: events.lastError,
+    ...listener,
     error: catalog.error ?? null,
     services: catalog.services.map((s) => `notify.${s}`),
     entities: catalog.entities,

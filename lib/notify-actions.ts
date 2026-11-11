@@ -3,32 +3,23 @@ import { addCalendarDays, calendarDayStr } from "./dates";
 import { prisma } from "./prisma";
 import { completeAssignment } from "./complete";
 import { appendIntegrationLog } from "./integration-log";
+import { ignoreNotifyAction, parseNotifyAction } from "./notify-action";
 import { dismissAssignmentNotify, holdAssignmentOnDate } from "./scheduler";
 
-export type NotifyActionKind = "done" | "tomorrow" | "later";
+export type { NotifyActionKind } from "./notify-action";
+export { parseNotifyAction } from "./notify-action";
 
 const DELAY_HOURS = 3;
-
-export function parseNotifyAction(action: string): { kind: NotifyActionKind; assignmentId: string } | null {
-  const rules: Array<{ prefix: string; kind: NotifyActionKind }> = [
-    { prefix: "MARK_DONE_", kind: "done" },
-    { prefix: "DONE_", kind: "done" },
-    { prefix: "DEFER_", kind: "tomorrow" },
-    { prefix: "DELAY_", kind: "later" },
-    { prefix: "WAIT_", kind: "later" },
-    { prefix: "LATER_", kind: "later" },
-  ];
-  for (const { prefix, kind } of rules) {
-    if (action.startsWith(prefix)) return { kind, assignmentId: action.slice(prefix.length) };
-  }
-  return null;
-}
 
 export async function applyNotifyAction(opts: {
   action: string;
   actorId?: string;
   source: "webhook" | "ha-event";
 }) {
+  if (ignoreNotifyAction(opts.action, opts.source)) {
+    return { ok: false as const, status: 400, reason: "unknown action" };
+  }
+
   const parsed = parseNotifyAction(opts.action);
   if (!parsed) {
     await appendIntegrationLog({

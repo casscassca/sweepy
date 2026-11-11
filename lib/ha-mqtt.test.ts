@@ -76,7 +76,18 @@ describe("ha mqtt payloads", () => {
     assert.ok(topicsOut.includes("homeassistant/sensor/sweepy_room_room1/config"));
     assert.ok(topicsOut.includes("homeassistant/sensor/sweepy_task_task1/config"));
     assert.ok(topicsOut.includes("homeassistant/sensor/sweepy_task_task1_last_done/config"));
-    assert.ok(topicsOut.includes("homeassistant/device_automation/sweepy_task_task1_completed/config"));
+    assert.ok(topicsOut.includes("homeassistant/device_automation/sweepy_task_task1_action/config"));
+    const legacy = messages.find((m) => m.topic === "homeassistant/device_automation/sweepy_task_task1_completed/config");
+    assert.ok(legacy);
+    assert.equal(legacy.payload, "");
+    assert.equal(legacy.retain, true);
+    const trigger = messages.find((m) => m.topic === "homeassistant/device_automation/sweepy_task_task1_action/config");
+    assert.ok(trigger);
+    const triggerJson: unknown = JSON.parse(trigger.payload);
+    assert.ok(triggerJson && typeof triggerJson === "object" && "subtype" in triggerJson && "topic" in triggerJson);
+    assert.equal(triggerJson.subtype, "completed_task1");
+    assert.equal(triggerJson.topic, "sweepy/task/task1/event");
+    assert.equal("payload" in triggerJson && triggerJson.payload, "completed");
     assert.deepEqual(inventory.tasks, ["task1"]);
     assert.deepEqual(inventory.rooms, ["room1"]);
     assert.deepEqual(inventory.homes, { task1: "room1" });
@@ -95,6 +106,30 @@ describe("ha mqtt payloads", () => {
     const device = disc.device;
     assert.ok(device && typeof device === "object" && "name" in device);
     assert.equal(device.name, "Kitchen");
+  });
+
+  it("gives every chore on a room its own device trigger", () => {
+    const dishes = { ...feeder, id: "task2", name: "Dishes" };
+    const { messages } = buildPublishPlan({
+      rooms: [{ id: "room1", name: "Kitchen", icon: "🍳", tasks: [feeder, dishes] }],
+      unassigned: [],
+      assignments: [],
+      asOf,
+      today,
+      topics,
+    });
+    const configs = messages.filter((m) => m.topic.startsWith("homeassistant/device_automation/") && m.payload);
+    const keys = configs.map((m) => {
+      const body: unknown = JSON.parse(m.payload);
+      assert.ok(body && typeof body === "object" && "type" in body && "subtype" in body && "device" in body);
+      const device = body.device;
+      assert.ok(device && typeof device === "object" && "identifiers" in device && Array.isArray(device.identifiers));
+      return `${device.identifiers[0]}|${String(body.type)}|${String(body.subtype)}`;
+    });
+    assert.deepEqual(keys.sort(), [
+      "sweepy_room_room1|action|completed_task1",
+      "sweepy_room_room1|action|completed_task2",
+    ]);
   });
 
   it("skips the unassigned room when every chore has a room", () => {
@@ -143,6 +178,7 @@ describe("ha mqtt payloads", () => {
     const topicsOut = tombstoneTopics(topics, ["gone"], ["oldroom"]);
     assert.ok(topicsOut.includes("homeassistant/sensor/sweepy_task_gone/config"));
     assert.ok(topicsOut.includes(`homeassistant/sensor/${lastDoneObjectId("gone")}/config`));
+    assert.ok(topicsOut.includes("homeassistant/device_automation/sweepy_task_gone_action/config"));
     assert.ok(topicsOut.includes("homeassistant/device_automation/sweepy_task_gone_completed/config"));
     assert.ok(topicsOut.includes("homeassistant/sensor/sweepy_room_oldroom/config"));
   });

@@ -99,8 +99,18 @@ export function roomObjectId(roomId: string) {
   return `sweepy_room_${roomId}`;
 }
 
-export function completedTriggerId(taskId: string) {
+/** Discovery topic Home Assistant already has retained. Subtype was `completed` for every chore on the room, so only one could register. */
+export function legacyCompletedTriggerId(taskId: string) {
   return `sweepy_task_${taskId}_completed`;
+}
+
+export function completedTriggerId(taskId: string) {
+  return `sweepy_task_${taskId}_action`;
+}
+
+export function completedTriggerSubtype(taskId: string) {
+  const slug = taskId.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "");
+  return `completed_${slug || "task"}`;
 }
 
 export type HaMqttInventory = {
@@ -327,7 +337,7 @@ export function completedTriggerDiscovery(task: HaMqttTask, topics: HaMqttTopics
   return {
     automation_type: "trigger",
     type: "action",
-    subtype: "completed",
+    subtype: completedTriggerSubtype(task.id),
     topic: `${topics.base}/task/${task.id}/event`,
     payload: "completed",
     device: roomDevice(task.roomId, task.roomName),
@@ -391,6 +401,7 @@ export function tombstoneTopics(
     out.push(`${topics.discoveryPrefix}/sensor/${addon2ObjectId(id)}/config`);
     out.push(`${topics.discoveryPrefix}/sensor/${addon2LastDoneObjectId(id)}/config`);
     out.push(`${topics.discoveryPrefix}/device_automation/${completedTriggerId(id)}/config`);
+    out.push(`${topics.discoveryPrefix}/device_automation/${legacyCompletedTriggerId(id)}/config`);
   }
   for (const id of roomIds) {
     out.push(`${topics.discoveryPrefix}/sensor/${roomObjectId(id)}/config`);
@@ -462,6 +473,11 @@ export function buildPublishPlan(opts: {
       task,
       topics,
     }));
+    messages.push({
+      topic: `${topics.discoveryPrefix}/device_automation/${legacyCompletedTriggerId(task.id)}/config`,
+      payload: "",
+      retain: true,
+    });
     pushDiscovery("device_automation", completedTriggerId(task.id), completedTriggerDiscovery(task, topics));
     messages.push({
       topic: stateTopic,
