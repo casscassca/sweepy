@@ -1,125 +1,134 @@
 import { haConfig } from "./ha";
 import { applyNotifyAction } from "./notify-actions";
 import { appendIntegrationLog } from "./integration-log";
-
-type ListenerStatus = {
-  listening: boolean;
-  lastError: string | null;
-  lastEventAt: string | null;
-};
-
-const status: ListenerStatus = { listening: false, lastError: null, lastEventAt: null };
-let started = false;
-let msgId = 1;
+import { haEventRuntime, type HaEventRuntime } from "./ha-runtime";
+import {
+  HA_INITIAL_BACKOFF_MS,
+  markHaConfigMissing,
+  nextBackoffMs,
+  runHaConnectAttempt,
+  type CancelTimer,
+} from "./ha-event-session";
 
 export function haEventStatus() {
-  return { ...status };
-}
-
-function wsUrl(httpUrl: string) {
-  if (httpUrl.startsWith("https://")) return `${httpUrl.replace("https://", "wss://")}/api/websocket`;
-  return `${httpUrl.replace("http://", "ws://")}/api/websocket`;
+  startHaEventListener();
+  const rt = haEventRuntime();
+  return {
+    listening: rt.listening,
+    lastError: rt.lastError,
+    lastEventAt: rt.lastEventAt,
+    phase: rt.phase,
+    started: rt.started,
+  };
 }
 
 export function startHaEventListener() {
-  if (started) return;
-  started = true;
-  void connect(1000);
+  const rt = haEventRuntime();
+  if (rt.loop) return;
+  rt.loop = true;
+  rt.started = true;
+  void runLoop().catch((err) => {
+    const message = err instanceof Error ? err.message : String(err);
+    const current = haEventRuntime();
+    current.loop = false;
+    current.listening = false;
+    current.phase = "backoff";
+    current.lastError = message;
+    void reportListenError();
+  });
 }
 
-async function connect(backoffMs: number) {
-  const ha = haConfig();
-  if (!ha) {
-    status.listening = false;
-    status.lastError = "HA_URL or HA_TOKEN is not set";
-    return;
-  }
+async function runLoop() {
+  let backoff = HA_INITIAL_BACKOFF_MS;
+  for (;;) {
+    const ha = haConfig();
+    if (!ha) {
+      markHaConfigMissing(haEventRuntime(), backoff);
+      await reportListenError();
+      await delay(backoff);
+      backoff = nextBackoffMs(backoff);
+      continue;
+    }
 
-  const url = wsUrl(ha.url);
-  let socket: WebSocket;
-  try {
-    socket = new WebSocket(url);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    status.listening = false;
-    status.lastError = msg;
-    scheduleReconnect(backoffMs);
-    return;
-  }
-
-  socket.addEventListener("message", (ev) => {
-    let msg: { type?: string; event?: { event_type?: string; data?: Record<string, unknown> } };
+    let result: { retryInMs: number; resetBackoff: boolean };
     try {
-      msg = JSON.parse(String(ev.data));
-    } catch {
-      return;
+      result = await runHaConnectAttempt({
+        httpUrl: ha.url,
+        token: ha.token,
+        backoffMs: backoff,
+        state: haEventRuntime(),
+        openSocket: (url) => new WebSocket(url),
+        setTimer,
+        onAction: (data) => applyNotifyAction({
+          action: String(data.action ?? ""),
+          actorId: actorIdFrom(data),
+          source: "ha-event",
+        }).then(() => undefined),
+        onListening: () => {
+          haEventRuntime().reportedError = null;
+          console.log("[ha-events] listening for notification actions");
+        },
+        logActionFailure: (message) => {
+          console.error("[ha-events] action failed", message);
+          void appendIntegrationLog({
+            kind: "webhook",
+            ok: false,
+            summary: "notification action failed",
+            detail: message.slice(0, 400),
+          });
+        },
+      });
+    } catch (err) {
+      const rt = haEventRuntime();
+      rt.listening = false;
+      rt.phase = "backoff";
+      rt.lastError = err instanceof Error ? err.message : String(err);
+      result = { retryInMs: backoff, resetBackoff: false };
     }
 
-    if (msg.type === "auth_required") {
-      socket.send(JSON.stringify({ type: "auth", access_token: ha.token }));
-      return;
-    }
-
-    if (msg.type === "auth_ok") {
-      status.listening = true;
-      status.lastError = null;
-      socket.send(JSON.stringify({
-        id: msgId++,
-        type: "subscribe_events",
-        event_type: "mobile_app_notification_action",
-      }));
-      console.log("[ha-events] listening for notification actions");
-      return;
-    }
-
-    if (msg.type === "auth_invalid") {
-      status.listening = false;
-      status.lastError = "HA token rejected";
-      socket.close();
-      return;
-    }
-
-    if (msg.type === "event" && msg.event?.event_type === "mobile_app_notification_action") {
-      void handleActionEvent(msg.event.data ?? {});
-    }
-  });
-
-  socket.addEventListener("close", () => {
-    status.listening = false;
-    scheduleReconnect(backoffMs);
-  });
-
-  socket.addEventListener("error", () => {
-    status.listening = false;
-    status.lastError = `websocket error (${url})`;
-    try { socket.close(); } catch { /* already closing */ }
-  });
+    await reportListenError();
+    await delay(result.retryInMs);
+    backoff = result.resetBackoff ? HA_INITIAL_BACKOFF_MS : nextBackoffMs(backoff);
+  }
 }
 
-function scheduleReconnect(backoffMs: number) {
-  const next = Math.min(backoffMs * 2, 30_000);
-  setTimeout(() => void connect(next), backoffMs);
-}
-
-async function handleActionEvent(data: Record<string, unknown>) {
-  status.lastEventAt = new Date().toISOString();
-  const action = String(data.action ?? "");
+function actorIdFrom(data: Record<string, unknown>) {
   const actionData = (data.action_data ?? {}) as Record<string, unknown>;
-  const actorId = typeof data.sweepyUserId === "string"
-    ? data.sweepyUserId
-    : typeof actionData.sweepyUserId === "string"
-      ? actionData.sweepyUserId
-      : undefined;
+  if (typeof data.sweepyUserId === "string") return data.sweepyUserId;
+  if (typeof actionData.sweepyUserId === "string") return actionData.sweepyUserId;
+  return undefined;
+}
 
-  if (!action) {
+async function reportListenError() {
+  const rt: HaEventRuntime = haEventRuntime();
+  const message = rt.lastError;
+  if (!message || message === rt.reportedError) return;
+  rt.reportedError = message;
+  console.warn("[ha-events]", message);
+  try {
     await appendIntegrationLog({
       kind: "webhook",
       ok: false,
-      summary: "HA button tap with no action",
-      detail: JSON.stringify(data).slice(0, 400),
+      summary: "HA button listener is down",
+      detail: message,
     });
-    return;
+  } catch (err) {
+    console.error("[ha-events] could not write the listener error", err);
   }
+}
 
-  await applyNotifyAction({ action, actorId, source: "ha-event" });
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function setTimer(fn: () => void, ms: number): CancelTimer {
+  const id = setTimeout(fn, ms);
+  let cancelled = false;
+  return {
+    cancel() {
+      if (cancelled) return;
+      cancelled = true;
+      clearTimeout(id);
+    },
+  };
 }

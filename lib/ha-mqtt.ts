@@ -13,12 +13,9 @@ import {
   type HaMqttTopics,
   type MqttMessage,
 } from "./ha-mqtt-payload";
+import { mqttMissingMessage, mqttSettings } from "./mqtt-env";
 import { prisma } from "./prisma";
 import { loadVacationContext } from "./vacation-db";
-
-function envValue(name: string) {
-  return (process.env[name] ?? "").trim().replace(/^['"]+|['"]+$/g, "");
-}
 
 export type MqttConn = {
   url: string;
@@ -28,63 +25,93 @@ export type MqttConn = {
 };
 
 export function mqttConfig(): MqttConn | null {
-  const url = envValue("MQTT_URL").replace(/\/$/, "");
-  if (!url) return null;
-  const username = envValue("MQTT_USER");
-  const password = envValue("MQTT_PASSWORD");
+  const settings = mqttSettings();
+  if (!settings.url) return null;
   return {
-    url,
-    username: username || null,
-    password: password || null,
+    url: settings.url,
+    username: settings.username,
+    password: settings.password,
     topics: {
-      discoveryPrefix: envValue("MQTT_DISCOVERY_PREFIX") || "homeassistant",
-      base: envValue("MQTT_BASE") || "sweepy",
+      discoveryPrefix: settings.discoveryPrefix,
+      base: settings.base,
     },
   };
 }
 
-type MqttStatus = {
-  configured: boolean;
+type MqttRuntime = {
+  started: boolean;
+  client: MqttClient | null;
   connected: boolean;
   lastError: string | null;
   lastSyncAt: string | null;
-  url: string | null;
+  syncTimer: ReturnType<typeof setTimeout> | null;
+  syncLock: Promise<void>;
+  lastInventory: HaMqttInventory;
+  inventoryHydrated: boolean;
 };
 
-const status: MqttStatus = {
-  configured: false,
-  connected: false,
-  lastError: null,
-  lastSyncAt: null,
-  url: null,
-};
+const MQTT_KEY = Symbol.for("sweepy.haMqtt");
 
-let started = false;
-let client: MqttClient | null = null;
-let syncTimer: ReturnType<typeof setTimeout> | null = null;
-let syncLock: Promise<void> = Promise.resolve();
-let lastInventory: HaMqttInventory = { tasks: [], rooms: [], extras: [], homes: {} };
-let inventoryHydrated = false;
+function emptyInventory(): HaMqttInventory {
+  return { tasks: [], rooms: [], extras: [], homes: {} };
+}
+
+/**
+ * The standalone server bundles this module twice: once for instrumentation
+ * and once for route handlers. A `let client` in the route copy was compiled
+ * out (the route never calls start), so publishes from the API did nothing
+ * and /api/ha-status always reported configured: false. The broker client
+ * lives on globalThis so both copies share it.
+ */
+function mqttRuntime(): MqttRuntime {
+  const g = globalThis as typeof globalThis & { [MQTT_KEY]?: MqttRuntime };
+  if (!g[MQTT_KEY]) {
+    g[MQTT_KEY] = {
+      started: false,
+      client: null,
+      connected: false,
+      lastError: null,
+      lastSyncAt: null,
+      syncTimer: null,
+      syncLock: Promise.resolve(),
+      lastInventory: emptyInventory(),
+      inventoryHydrated: false,
+    };
+  }
+  return g[MQTT_KEY];
+}
 
 export function haMqttStatus() {
-  return { ...status };
+  startHaMqtt();
+  const settings = mqttSettings();
+  const rt = mqttRuntime();
+  const configured = Boolean(settings.url);
+  return {
+    configured,
+    connected: configured && rt.connected,
+    lastError: configured ? rt.lastError : mqttMissingMessage(),
+    lastSyncAt: rt.lastSyncAt,
+    url: settings.url,
+    missing: settings.missing,
+    started: rt.started,
+  };
 }
 
 export function startHaMqtt() {
-  if (started) return;
-  started = true;
+  const rt = mqttRuntime();
+  if (rt.started) return;
+  rt.started = true;
   const cfg = mqttConfig();
   if (!cfg) {
-    status.configured = false;
-    status.lastError = "MQTT_URL is not set";
+    rt.connected = false;
+    rt.lastError = mqttMissingMessage();
     return;
   }
-  status.configured = true;
-  status.url = cfg.url;
-  connectBroker(cfg);
+  rt.lastError = null;
+  connectBroker(cfg, rt);
 }
 
-function connectBroker(cfg: MqttConn) {
+function connectBroker(cfg: MqttConn, rt: MqttRuntime) {
   const next = connect(cfg.url, {
     reconnectPeriod: 5000,
     protocolVersion: 4,
@@ -97,29 +124,29 @@ function connectBroker(cfg: MqttConn) {
       qos: 1,
     },
   });
-  client = next;
+  rt.client = next;
 
   next.on("connect", () => {
-    status.connected = true;
-    status.lastError = null;
+    rt.connected = true;
+    rt.lastError = null;
     console.log(`[ha-mqtt] connected to ${cfg.url}`);
     next.publish(`${cfg.topics.base}/status`, "online", { retain: true, qos: 1 });
     void (async () => {
-      if (!inventoryHydrated) {
-        lastInventory = await readRetainedInventory(next, cfg);
-        inventoryHydrated = true;
+      if (!rt.inventoryHydrated) {
+        rt.lastInventory = await readRetainedInventory(next, cfg);
+        rt.inventoryHydrated = true;
       }
       await runInventorySync();
     })();
   });
 
   next.on("offline", () => {
-    status.connected = false;
+    rt.connected = false;
   });
 
   next.on("error", (err) => {
-    status.connected = false;
-    status.lastError = err.message;
+    rt.connected = false;
+    rt.lastError = err.message;
     console.warn("[ha-mqtt]", err.message);
   });
 }
@@ -149,10 +176,12 @@ function readRetainedInventory(sock: MqttClient, cfg: MqttConn) {
 }
 
 export function scheduleHaMqttSync() {
+  startHaMqtt();
+  const rt = mqttRuntime();
   if (!mqttConfig()) return;
-  if (syncTimer) clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => {
-    syncTimer = null;
+  if (rt.syncTimer) clearTimeout(rt.syncTimer);
+  rt.syncTimer = setTimeout(() => {
+    rt.syncTimer = null;
     void runInventorySync();
   }, 800);
 }
@@ -164,6 +193,7 @@ export async function publishHaMqttTaskEvent(opts: {
   userId?: string | null;
   completedById?: string | null;
 }) {
+  startHaMqtt();
   const cfg = mqttConfig();
   if (!cfg) return;
   const task = await loadTask(opts.taskId);
@@ -202,19 +232,20 @@ async function nameFor(userId: string | null | undefined) {
 }
 
 async function runInventorySync() {
+  const rt = mqttRuntime();
   const cfg = mqttConfig();
-  if (!cfg || !client?.connected) return;
-  const previous = syncLock;
+  if (!cfg || !rt.client?.connected) return;
+  const previous = rt.syncLock;
   let unlock = () => {};
-  syncLock = new Promise<void>((resolve) => {
+  rt.syncLock = new Promise<void>((resolve) => {
     unlock = resolve;
   });
   await previous;
   try {
     await publishInventory(cfg);
   } catch (err) {
-    status.lastError = err instanceof Error ? err.message : String(err);
-    console.warn("[ha-mqtt] sync failed", status.lastError);
+    rt.lastError = err instanceof Error ? err.message : String(err);
+    console.warn("[ha-mqtt] sync failed", rt.lastError);
   } finally {
     unlock();
   }
@@ -266,22 +297,23 @@ async function publishInventory(cfg: MqttConn) {
     topics: cfg.topics,
   });
 
-  const gone = idsToRemove(lastInventory.tasks, inventory.tasks);
-  const moved = Object.keys(lastInventory.homes).length === 0
+  const rt = mqttRuntime();
+  const gone = idsToRemove(rt.lastInventory.tasks, inventory.tasks);
+  const moved = Object.keys(rt.lastInventory.homes).length === 0
     ? inventory.tasks
-    : tasksThatMoved(lastInventory.homes, inventory.homes);
+    : tasksThatMoved(rt.lastInventory.homes, inventory.homes);
   for (const topic of tombstoneTopics(
     cfg.topics,
     [...new Set([...gone, ...moved])],
-    idsToRemove(lastInventory.rooms, inventory.rooms),
-    idsToRemove(lastInventory.extras, inventory.extras),
+    idsToRemove(rt.lastInventory.rooms, inventory.rooms),
+    idsToRemove(rt.lastInventory.extras, inventory.extras),
   )) {
     await publish({ topic, payload: "", retain: true });
   }
 
   for (const message of messages) await publish(message);
-  lastInventory = inventory;
-  status.lastSyncAt = new Date().toISOString();
+  rt.lastInventory = inventory;
+  rt.lastSyncAt = new Date().toISOString();
 }
 
 function toHaTask(task: {
@@ -343,7 +375,7 @@ async function loadTask(taskId: string): Promise<HaMqttTask | null> {
 }
 
 async function publish(message: MqttMessage) {
-  const sock = client;
+  const sock = mqttRuntime().client;
   if (!sock?.connected) return;
   await new Promise<void>((resolve, reject) => {
     sock.publish(message.topic, message.payload, { retain: message.retain, qos: 1 }, (err) => {

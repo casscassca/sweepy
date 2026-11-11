@@ -21,6 +21,7 @@ type HaMqttStatus = {
   lastError: string | null;
   lastSyncAt: string | null;
   url: string | null;
+  missing?: string[];
 };
 type HaStatus = {
   configured: boolean;
@@ -29,6 +30,7 @@ type HaStatus = {
   listening?: boolean;
   lastEventAt?: string | null;
   listenError?: string | null;
+  listenPhase?: string | null;
   error: string | null;
   services: string[];
   entities: string[];
@@ -126,15 +128,16 @@ export default function SettingsPage() {
             <p className="text-sm" style={{ color: ha.reachable ? "var(--green)" : "var(--red)" }}>
               {ha.reachable ? `Connected to ${ha.url}` : ha.error ?? "Not connected"}
             </p>
-            <p className="text-sm" style={{ color: ha.listening ? "var(--green)" : "var(--text3)" }}>
+            <p className="text-sm" style={{ color: ha.listening ? "var(--green)" : ha.listenError ? "var(--red)" : "var(--text3)" }}>
               {ha.listening
                 ? "Listening for Done / Tomorrow / Delay taps"
-                : ha.listenError ?? "Not listening for button taps yet"}
+                : ha.listenError
+                  ?? (ha.listenPhase === "connecting"
+                    ? "Connecting to Home Assistant…"
+                    : "Not listening for button taps yet")}
             </p>
-            <p className="text-sm" style={{ color: ha.mqtt?.connected ? "var(--green)" : "var(--text3)" }}>
-              {ha.mqtt?.connected
-                ? `Publishing rooms and chores to ${ha.mqtt.url}`
-                : ha.mqtt?.lastError ?? "MQTT not connected"}
+            <p className="text-sm" style={{ color: ha.mqtt?.connected ? "var(--green)" : ha.mqtt?.lastError ? "var(--red)" : "var(--text3)" }}>
+              {mqttStatusLine(ha.mqtt)}
             </p>
           </div>
         ) : (
@@ -215,7 +218,7 @@ export default function SettingsPage() {
               Sweepy listens for the notification buttons on that connection, so you do not need a Home Assistant automation for Done / Tomorrow / Delay.
             </p>
             <p className="text-sm" style={{ color: "var(--text2)" }}>
-              Chore sensors use the same Mosquitto broker as Zigbee, no login. Set <code className="text-xs">MQTT_URL</code> in that same <code className="text-xs">.env</code>. Rooms show up as Home Assistant devices with a cleanliness % and each catalog chore as a dirt sensor.
+              Chore sensors use the same Mosquitto broker as Zigbee. Set <code className="text-xs">MQTT_URL</code> in that container <code className="text-xs">.env</code> (read when Sweepy starts, not when the image is built). Optional: <code className="text-xs">MQTT_USER</code>, <code className="text-xs">MQTT_PASSWORD</code>, <code className="text-xs">MQTT_DISCOVERY_PREFIX</code> (default homeassistant), <code className="text-xs">MQTT_BASE</code> (default sweepy). If this page says MQTT_URL is not set, the running container does not have it — old Sweepy devices can still sit in Home Assistant from an earlier publish.
             </p>
             {ha && ha.services.length > 0 && (
               <div>
@@ -280,6 +283,14 @@ export default function SettingsPage() {
       </div>
     </div>
   );
+}
+
+function mqttStatusLine(mqtt: HaMqttStatus | undefined) {
+  if (!mqtt) return "MQTT status unavailable";
+  if (mqtt.connected && mqtt.url) return `Publishing rooms and chores to ${mqtt.url}`;
+  if (mqtt.lastError) return mqtt.lastError;
+  if (!mqtt.configured) return "MQTT_URL is not set in the container environment";
+  return "MQTT_URL is set but the broker is not connected";
 }
 
 function fmt(n: number) {
