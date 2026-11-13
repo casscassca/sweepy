@@ -34,7 +34,7 @@ export default function LoginForm({ users }: { users: LoginUser[] }) {
     <div className="min-h-full flex items-center justify-center px-5 py-16">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <img src="/favicon.png" alt="" width={160} height={160} className="w-36 h-36 object-contain mb-3" />
+          <img src="/mascot.png" alt="" width={160} height={160} className="w-36 h-36 object-contain mb-3" />
           <span className="font-semibold text-xl tracking-tight" style={{ color: "var(--text)" }}>
             Sweepy
           </span>
