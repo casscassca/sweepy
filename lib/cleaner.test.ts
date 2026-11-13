@@ -62,20 +62,19 @@ describe("cleaner checklist", () => {
     ]);
   });
 
-  it("leaves off a line already done today, and the room if nothing is left", () => {
+  it("keeps a line that was already done today, still unchecked", () => {
     const finished = {
       ...vacuum,
       lastDoneAt: new Date("2026-11-13T08:00:00-06:00"),
       addonLastDoneAt: new Date("2026-11-13T08:00:00-06:00"),
       addon2LastDoneAt: new Date("2026-11-13T08:00:00-06:00"),
     };
-    assert.deepEqual(linesForCleaner(finished, today), []);
-    const sections = cleanerChecklist(
-      [{ id: "kitchen", name: "Kitchen", icon: "🍳", tasks: [finished] }],
-      [],
-      today,
-    );
-    assert.deepEqual(sections, []);
+    const lines = linesForCleaner(finished, today);
+    assert.deepEqual(lines.map((line) => [line.name, line.done]), [
+      ["Vacuum", false],
+      ["Mop", false],
+      ["Baseboards", false],
+    ]);
   });
 
   it("drops a room when every chore in it is hidden", () => {
@@ -97,7 +96,7 @@ describe("cleaner checklist", () => {
       [],
       today,
     );
-    assert.deepEqual(sections[0].lines.map((line) => line.name), ["Vacuum", "Baseboards"]);
+    assert.deepEqual(sections[0].lines.map((line) => line.name), ["Vacuum", "Mop", "Baseboards"]);
   });
 
   it("names an add-on completion as just that add-on", () => {

@@ -1,6 +1,5 @@
 import { timingSafeEqual } from "crypto";
 import { hasAddon, hasAddon2, isAddon2Due, isAddonDue, type AddonFields } from "./addon";
-import { calendarDayStr } from "./dates";
 
 export type CleanerLayer = "base" | "addon" | "addon2";
 
@@ -38,11 +37,6 @@ type CleanerRoom = {
   tasks: AddonFields & { id: string; hideFromCleaner?: boolean; oneOff?: boolean }[];
 };
 
-function doneOn(at: Date | string | null | undefined, today: string) {
-  if (!at) return false;
-  return calendarDayStr(at) === today;
-}
-
 /** First letter only, so "mop floors" becomes "Mop floors". */
 export function capitalizeFirst(name: string) {
   const trimmed = name.trim();
@@ -52,20 +46,18 @@ export function capitalizeFirst(name: string) {
 
 export function linesForCleaner(
   task: AddonFields & { id: string; hideFromCleaner?: boolean; oneOff?: boolean },
-  today: string,
+  _today: string,
 ): CleanerLine[] {
   if (task.oneOff || task.hideFromCleaner) return [];
-  const lines: CleanerLine[] = [];
-  // Already done today stays off the list. The cleaner does not see household check-offs.
-  if (!doneOn(task.lastDoneAt, today)) {
-    lines.push({
+  const lines: CleanerLine[] = [
+    {
       taskId: task.id,
       layer: "base",
       name: capitalizeFirst(task.name ?? ""),
       done: false,
-    });
-  }
-  if (hasAddon(task) && !doneOn(task.addonLastDoneAt, today)) {
+    },
+  ];
+  if (hasAddon(task)) {
     lines.push({
       taskId: task.id,
       layer: "addon",
@@ -73,7 +65,7 @@ export function linesForCleaner(
       done: false,
     });
   }
-  if (hasAddon2(task) && !doneOn(task.addon2LastDoneAt, today)) {
+  if (hasAddon2(task)) {
     lines.push({
       taskId: task.id,
       layer: "addon2",
