@@ -114,7 +114,6 @@ function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRem
         <CompleteAsMenu
           users={users}
           task={assignment.task}
-          meId={meId}
           onPick={(userId, date, layers) => { onComplete(assignment.id, userId, date, layers); setShowWho(false); }}
           onClose={() => setShowWho(false)}
         />
