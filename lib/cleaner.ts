@@ -111,6 +111,31 @@ export function cleanerCompletionName(
   return task.name ?? "";
 }
 
+/** Undoing the Cleaner's check-off should not leave them an open chore. */
+export function reopenAssignmentAfterUndo(assigneeIsCleaner: boolean) {
+  return !assigneeIsCleaner;
+}
+
+export type CleanerSubmitLine = { taskId: string; layer: CleanerLayer };
+
+/** The lines a cleaner chose, with blanks and repeats dropped. */
+export function cleanerSubmitLines(raw: unknown): CleanerSubmitLine[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const lines: CleanerSubmitLine[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as { taskId?: unknown; layer?: unknown };
+    const layer = row.layer === "base" || row.layer === "addon" || row.layer === "addon2" ? row.layer : null;
+    if (typeof row.taskId !== "string" || !row.taskId.trim() || !layer) continue;
+    const key = `${row.taskId}:${layer}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push({ taskId: row.taskId, layer });
+  }
+  return lines.slice(0, 300);
+}
+
 type StampLog = { id: string; completedAt: Date; layer: string };
 
 export function previousLayerStamp(logsDesc: StampLog[], removedId: string, layer: CleanerLayer): Date | null {

@@ -298,7 +298,10 @@ export default function UpcomingPage() {
   }
 
   async function uncomplete(assignmentId: string) {
-    setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: null } : a)));
+    const row = assignments.find((a) => a.id === assignmentId);
+    setAssignments((prev) => row?.user.cleaner
+      ? prev.filter((a) => a.id !== assignmentId)
+      : prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: null } : a)));
     const res = await fetch("/api/complete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId }) });
     invalidateLists();
     if (!res.ok) load();
@@ -367,12 +370,13 @@ export default function UpcomingPage() {
     await load();
   }
 
-  const others = users.filter((u) => u.id !== me?.id);
+  const others = users.filter((u) => u.id !== me?.id && !u.cleaner);
+  const listed = assignments.filter((a) => !(a.user.cleaner && !a.completedAt));
   const byWho = who === "all"
-    ? assignments
+    ? listed
     : who === "me"
-      ? assignments.filter((a) => a.userId === me?.id)
-      : assignments.filter((a) => a.userId === who);
+      ? listed.filter((a) => a.userId === me?.id)
+      : listed.filter((a) => a.userId === who);
   const visible = hideDone ? byWho.filter((a) => !a.completedAt) : byWho;
   const totalDone = byWho.filter((a) => a.completedAt).length;
 

@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { laterInstant } from "./dates";
-import { completionLayers, previousLayerStamp, type CleanerLayer } from "./cleaner";
+import { completionLayers, previousLayerStamp, reopenAssignmentAfterUndo, type CleanerLayer } from "./cleaner";
 import { publishHaMqttTaskEvent, scheduleHaMqttSync } from "./ha-mqtt";
 import {
   isFilterAddonTask,
@@ -218,10 +218,18 @@ export async function uncompleteFromLog(logId: string) {
     assignment = done.find((a) => a.completedAt && Math.abs(a.completedAt.getTime() - doneAt) < 5000) ?? null;
   }
   if (assignment && isLatest && layer === "base") {
-    await prisma.dailyAssignment.update({
-      where: { id: assignment.id },
-      data: { completedAt: null, completedById: null },
+    const assignee = await prisma.user.findUnique({
+      where: { id: assignment.userId },
+      select: { cleaner: true },
     });
+    if (reopenAssignmentAfterUndo(Boolean(assignee?.cleaner))) {
+      await prisma.dailyAssignment.update({
+        where: { id: assignment.id },
+        data: { completedAt: null, completedById: null },
+      });
+    } else {
+      await prisma.dailyAssignment.delete({ where: { id: assignment.id } });
+    }
   }
 
   scheduleHaMqttSync();
@@ -242,10 +250,18 @@ export async function uncompleteAssignment(assignmentId: string) {
   const match = logs.find((log) => Math.abs(log.completedAt.getTime() - doneAt) < 5000) ?? logs[0];
   if (match) return uncompleteFromLog(match.id);
 
-  await prisma.dailyAssignment.update({
-    where: { id: assignmentId },
-    data: { completedAt: null, completedById: null },
+  const assignee = await prisma.user.findUnique({
+    where: { id: assignment.userId },
+    select: { cleaner: true },
   });
+  if (reopenAssignmentAfterUndo(Boolean(assignee?.cleaner))) {
+    await prisma.dailyAssignment.update({
+      where: { id: assignmentId },
+      data: { completedAt: null, completedById: null },
+    });
+  } else {
+    await prisma.dailyAssignment.delete({ where: { id: assignmentId } });
+  }
   scheduleHaMqttSync();
   return { ok: true as const };
 }

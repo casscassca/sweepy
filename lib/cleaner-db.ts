@@ -22,6 +22,15 @@ export async function accountOwnerId() {
   return owner?.id ?? null;
 }
 
+/** The Cleaner person never keeps an unfinished chore on a day. */
+export async function clearOpenCleanerAssignments() {
+  const removed = await prisma.dailyAssignment.deleteMany({
+    where: { completedAt: null, user: { cleaner: true } },
+  });
+  if (removed.count > 0) scheduleHaMqttSync();
+  return removed.count;
+}
+
 export async function ensureCleaner() {
   const existing = await prisma.user.findFirst({ where: { cleaner: true }, orderBy: { createdAt: "asc" } });
   if (existing) return existing;

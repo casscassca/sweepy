@@ -5,6 +5,8 @@ import {
   cleanerCode,
   cleanerCodesMatch,
   cleanerCompletionName,
+  cleanerSubmitLines,
+  reopenAssignmentAfterUndo,
   completionLayers,
   linesForCleaner,
   previousLayerStamp,
@@ -102,6 +104,30 @@ describe("cleaner checklist", () => {
   it("names an add-on completion as just that add-on", () => {
     assert.equal(cleanerCompletionName(vacuum, "addon"), "mop");
     assert.equal(cleanerCompletionName(vacuum, "base"), "Vacuum");
+  });
+});
+
+describe("undo a cleaner assignment", () => {
+  it("drops the open chore when it was the cleaner's, and reopens anyone else's", () => {
+    assert.equal(reopenAssignmentAfterUndo(true), false);
+    assert.equal(reopenAssignmentAfterUndo(false), true);
+  });
+});
+
+describe("cleaner submit", () => {
+  it("keeps chosen lines and drops blanks and repeats", () => {
+    assert.deepEqual(cleanerSubmitLines([
+      { taskId: "vac", layer: "base" },
+      { taskId: "vac", layer: "base" },
+      { taskId: "vac", layer: "addon" },
+      { taskId: "", layer: "base" },
+      { taskId: "mop", layer: "nope" },
+      null,
+    ]), [
+      { taskId: "vac", layer: "base" },
+      { taskId: "vac", layer: "addon" },
+    ]);
+    assert.deepEqual(cleanerSubmitLines({}), []);
   });
 });
 
