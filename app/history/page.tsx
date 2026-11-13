@@ -2,11 +2,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import Link from "next/link";
-import { ArrowLeft, RotateCcw } from "lucide-react";
-import { getJson, invalidateLists } from "@/lib/api-cache";
+import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
+import { getJson, invalidateApi, invalidateLists } from "@/lib/api-cache";
 import { cleanerCompletionName } from "@/lib/cleaner";
+import { bothHistoryPeople } from "@/lib/history";
 
-type Person = { id: string; name: string; color: string };
+type Person = { id: string; name: string; color: string; cleaner?: boolean };
 type CompletionEntry = {
   kind?: "completion";
   id: string;
@@ -84,6 +85,21 @@ export default function HistoryPage() {
   }
 
   useEffect(() => { load(true); }, [who]);
+
+  async function removeNote(id: string) {
+    if (undoingId) return;
+    setUndoingId(id);
+    const res = await fetch("/api/clean/notes", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, erase: true }),
+    });
+    setUndoingId(null);
+    if (res.ok) {
+      invalidateApi("/api/clean/notes", "/api/history");
+      setEntries((prev) => prev.filter((entry) => entry.id !== id));
+    }
+  }
 
   async function undo(id: string) {
     if (undoingId) return;
@@ -169,10 +185,23 @@ export default function HistoryPage() {
                       {format(new Date(entry.completedAt), "h:mm a")}
                     </span>
                     {isNote(entry) ? (
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm whitespace-pre-wrap break-words">{entry.body}</p>
-                        <p className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>Cleaner note</p>
-                      </div>
+                      <>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm whitespace-pre-wrap break-words">{entry.body}</p>
+                          <p className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>Cleaner note</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeNote(entry.id)}
+                          disabled={undoingId === entry.id}
+                          className="p-2 rounded-lg shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                          style={{ color: "var(--text3)" }}
+                          title="Delete this note"
+                          aria-label="Delete this note"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
                     ) : (
                       <>
                         <div className="flex-1 min-w-0">
@@ -187,7 +216,7 @@ export default function HistoryPage() {
                               ) : (
                                 <>
                                   <span className="flex items-center shrink-0">
-                                    {users.slice(0, 2).map((u, i) => (
+                                    {bothHistoryPeople(users).map((u, i) => (
                                       <span
                                         key={u.id}
                                         className="w-1.5 h-1.5 rounded-full"

@@ -34,6 +34,7 @@ type CleanerRoom = {
   id: string;
   name: string;
   icon: string;
+  hideFromCleaner?: boolean;
   tasks: AddonFields & { id: string; hideFromCleaner?: boolean; oneOff?: boolean }[];
 };
 
@@ -77,7 +78,7 @@ export function linesForCleaner(
 }
 
 export function cleanerChecklist(rooms: CleanerRoom[], unassigned: CleanerRoom["tasks"], today: string): CleanerSection[] {
-  const sections = rooms.map((room) => ({
+  const sections = rooms.filter((room) => !room.hideFromCleaner).map((room) => ({
     id: room.id,
     name: room.name,
     icon: room.icon,

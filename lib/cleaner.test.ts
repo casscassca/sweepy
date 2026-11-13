@@ -79,6 +79,15 @@ describe("cleaner checklist", () => {
     ]);
   });
 
+  it("drops a room marked hidden, even when its chores would show", () => {
+    const sections = cleanerChecklist(
+      [{ id: "bath", name: "Bathroom", icon: "🛁", hideFromCleaner: true, tasks: [vacuum] }],
+      [],
+      today,
+    );
+    assert.deepEqual(sections, []);
+  });
+
   it("drops a room when every chore in it is hidden", () => {
     const hidden = { ...vacuum, hideFromCleaner: true };
     const sections = cleanerChecklist(
