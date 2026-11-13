@@ -40,6 +40,10 @@ export async function DELETE(req: Request) {
   if (typeof body.id !== "string" || !body.id) {
     return NextResponse.json({ ok: false, reason: "id required" }, { status: 400 });
   }
+  if (body.erase === true) {
+    await prisma.cleanerNote.delete({ where: { id: body.id } }).catch(() => null);
+    return NextResponse.json({ ok: true });
+  }
   await prisma.cleanerNote.update({
     where: { id: body.id },
     data: { dismissedAt: new Date() },
