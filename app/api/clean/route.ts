@@ -14,6 +14,7 @@ export async function GET() {
   }
   const [rooms, unassigned] = await Promise.all([
     prisma.room.findMany({
+      where: { hideFromCleaner: false },
       orderBy: { order: "asc" },
       include: {
         tasks: { where: { oneOff: false, hideFromCleaner: false }, orderBy: { name: "asc" } },

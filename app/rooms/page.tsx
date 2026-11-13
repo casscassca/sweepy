@@ -34,7 +34,7 @@ type Task = {
   addon2LastDoneAt?: string | null;
   assignableUsers: { user: User }[];
 };
-type Room = { id: string; name: string; icon: string; tasks: Task[] };
+type Room = { id: string; name: string; icon: string; hideFromCleaner?: boolean; tasks: Task[] };
 
 const DIFF = [
   { value: 1, label: "Quick", color: "#a78bfa" },
@@ -187,6 +187,20 @@ function CatalogTaskRow({
   );
 }
 
+function CleanerRoomToggle({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-2.5 text-sm cursor-pointer sm:mb-1">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5" />
+      <span>
+        Don’t show for the cleaner
+        <span className="block text-xs font-normal mt-0.5" style={{ color: "var(--text3)" }}>
+          Leaves this room off the list you send the cleaner
+        </span>
+      </span>
+    </label>
+  );
+}
+
 function FilterChip({
   label, active, onClick,
 }: {
@@ -216,6 +230,7 @@ export default function RoomsPage() {
   const [showRoomForm, setShowRoomForm] = useState(false);
   const [roomName, setRoomName] = useState("");
   const [roomIcon, setRoomIcon] = useState("🏠");
+  const [roomHideFromCleaner, setRoomHideFromCleaner] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [taskForms, setTaskForms] = useState<Record<string, boolean>>({});
   const [editingTask, setEditingTask] = useState<(Task & { roomId: string }) | null>(null);
@@ -249,17 +264,17 @@ export default function RoomsPage() {
       await fetch(`/api/rooms/${editingRoom.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: roomName, icon: roomIcon }),
+        body: JSON.stringify({ name: roomName, icon: roomIcon, hideFromCleaner: roomHideFromCleaner }),
       });
       setEditingRoom(null);
     } else {
       await fetch("/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: roomName, icon: roomIcon }),
+        body: JSON.stringify({ name: roomName, icon: roomIcon, hideFromCleaner: roomHideFromCleaner }),
       });
     }
-    setRoomName(""); setRoomIcon("🏠"); setShowRoomForm(false);
+    setRoomName(""); setRoomIcon("🏠"); setRoomHideFromCleaner(false); setShowRoomForm(false);
     invalidateLists();
     load();
   }
@@ -395,7 +410,7 @@ export default function RoomsPage() {
             />
           </label>
           <button
-            onClick={() => { setShowRoomForm(true); setEditingRoom(null); setRoomName(""); setRoomIcon("🏠"); }}
+            onClick={() => { setShowRoomForm(true); setEditingRoom(null); setRoomName(""); setRoomIcon("🏠"); setRoomHideFromCleaner(false); }}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium text-white transition-colors shrink-0"
             style={{ background: "var(--accent)" }}
           >
@@ -436,6 +451,7 @@ export default function RoomsPage() {
               placeholder="e.g. Kitchen"
             />
           </div>
+          <CleanerRoomToggle checked={roomHideFromCleaner} onChange={setRoomHideFromCleaner} />
           <button
             type="submit"
             className="px-4 py-2 rounded-xl text-sm font-medium text-white"
@@ -485,6 +501,7 @@ export default function RoomsPage() {
                     className="w-full"
                   />
                 </div>
+                <CleanerRoomToggle checked={roomHideFromCleaner} onChange={setRoomHideFromCleaner} />
                 <button
                   type="submit"
                   className="px-4 py-2 rounded-xl text-sm font-medium text-white"
@@ -509,6 +526,9 @@ export default function RoomsPage() {
               <div className="flex items-center gap-2">
                 <span className="text-xl w-7 shrink-0 text-center">{room.icon}</span>
                 <span className="font-medium min-w-0 flex-1 md:flex-none md:max-w-[12rem] truncate">{room.name}</span>
+                {room.hideFromCleaner && (
+                  <span className="text-xs shrink-0" style={{ color: "var(--text3)" }}>Hidden from cleaner</span>
+                )}
                 <span className="hidden md:flex flex-1 min-w-10">
                   <RoomDirtGauge tasks={room.tasks} asOf={dirtAsOf} />
                 </span>
@@ -517,7 +537,7 @@ export default function RoomsPage() {
                 </span>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setEditingRoom(room); setRoomName(room.name); setRoomIcon(room.icon); setShowRoomForm(false); }}
+                  onClick={(e) => { e.stopPropagation(); setEditingRoom(room); setRoomName(room.name); setRoomIcon(room.icon); setRoomHideFromCleaner(Boolean(room.hideFromCleaner)); setShowRoomForm(false); }}
                   className="p-2 rounded-lg shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                   style={{ color: "var(--text3)" }}
                   aria-label="Edit room"

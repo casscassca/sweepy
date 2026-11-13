@@ -1,0 +1,1 @@
+ALTER TABLE "Room" ADD COLUMN "hideFromCleaner" BOOLEAN NOT NULL DEFAULT false;

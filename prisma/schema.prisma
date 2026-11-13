@@ -12,6 +12,7 @@ model Room {
   name      String
   icon      String   @default("🏠")
   order     Int      @default(0)
+  hideFromCleaner Boolean @default(false)
   createdAt DateTime @default(now())
   tasks     Task[]
 }

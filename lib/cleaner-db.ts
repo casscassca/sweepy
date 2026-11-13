@@ -86,8 +86,11 @@ export async function hasCleanerAccess() {
 }
 
 export async function completeCleanerLayer(taskId: string, layer: CleanerLayer) {
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
-  if (!task || task.oneOff || task.hideFromCleaner) {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: { room: { select: { hideFromCleaner: true } } },
+  });
+  if (!task || task.oneOff || task.hideFromCleaner || task.room?.hideFromCleaner) {
     return { ok: false as const, status: 404 as const, reason: "not found" };
   }
   if (layer === "addon" && !hasAddon(task)) return { ok: false as const, status: 400 as const, reason: "no add-on" };
