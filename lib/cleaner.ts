@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "crypto";
-import { hasAddon, hasAddon2, type AddonFields } from "./addon";
+import { hasAddon, hasAddon2, isAddon2Due, isAddonDue, type AddonFields } from "./addon";
 import { calendarDayStr } from "./dates";
 
 export type CleanerLayer = "base" | "addon" | "addon2";
@@ -83,6 +83,20 @@ export function cleanerChecklist(rooms: CleanerRoom[], unassigned: CleanerRoom["
   const extra = unassigned.flatMap((task) => linesForCleaner(task, today));
   if (extra.length > 0) sections.push({ id: "other", name: "Other", icon: "", lines: extra });
   return sections;
+}
+
+/** Which parts a completion records. Omit `requested` to keep the old “base plus whatever add-on is due” behavior. */
+export function completionLayers(task: AddonFields, at: Date, requested?: CleanerLayer[] | null): CleanerLayer[] {
+  const allowed = (layer: CleanerLayer) => {
+    if (layer === "base") return true;
+    if (layer === "addon") return hasAddon(task);
+    return hasAddon2(task);
+  };
+  if (requested && requested.length > 0) return requested.filter(allowed);
+  const layers: CleanerLayer[] = ["base"];
+  if (isAddonDue(task, at)) layers.push("addon");
+  if (isAddon2Due(task, at)) layers.push("addon2");
+  return layers;
 }
 
 export function cleanerCompletionName(

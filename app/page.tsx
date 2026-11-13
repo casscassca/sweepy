@@ -25,7 +25,7 @@ const DIFF_LABEL = ["", "quick", "medium", "big job"];
 
 function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRemove, onPin, onReassign }: {
   assignment: Assignment; users: User[]; meId?: string;
-  onComplete: (id: string, by: string | null, date?: string) => void;
+  onComplete: (id: string, by: string | null, date?: string, layers?: ("base" | "addon" | "addon2")[]) => void;
   onUncomplete: (id: string) => void;
   onRemove: (id: string) => void;
   onPin: (id: string, pinned: boolean) => void;
@@ -113,7 +113,9 @@ function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRem
       {showWho && (
         <CompleteAsMenu
           users={users}
-          onPick={(userId, date) => { onComplete(assignment.id, userId, date); setShowWho(false); }}
+          task={assignment.task}
+          meId={meId}
+          onPick={(userId, date, layers) => { onComplete(assignment.id, userId, date, layers); setShowWho(false); }}
           onClose={() => setShowWho(false)}
         />
       )}
@@ -178,22 +180,34 @@ export default function TodayPage() {
     await load(); setRunning(false);
   }
 
-  async function complete(assignmentId: string, completedById: string | null, completedAt?: string) {
+  async function complete(assignmentId: string, completedById: string | null, completedAt?: string, layers?: ("base" | "addon" | "addon2")[]) {
     const stamp = completedAt ? `${completedAt}T12:00:00` : new Date().toISOString();
+    const onlyPart = Boolean(layers?.length) && !layers?.includes("base");
     const leftToday = Boolean(completedAt && completedAt !== today);
     const nextUser = completedById ? users.find((u) => u.id === completedById) : undefined;
     setAssignments((prev) =>
-      leftToday
-        ? prev.filter((a) => a.id !== assignmentId)
-        : prev.map((a) => (a.id === assignmentId
+      onlyPart
+        ? prev.map((a) => (a.id === assignmentId
           ? {
               ...a,
-              completedAt: stamp,
-              ...(nextUser ? { userId: nextUser.id, user: nextUser } : {}),
+              task: {
+                ...a.task,
+                ...(layers?.includes("addon") ? { addonLastDoneAt: stamp } : {}),
+                ...(layers?.includes("addon2") ? { addon2LastDoneAt: stamp } : {}),
+              },
             }
           : a))
+        : leftToday
+          ? prev.filter((a) => a.id !== assignmentId)
+          : prev.map((a) => (a.id === assignmentId
+            ? {
+                ...a,
+                completedAt: stamp,
+                ...(nextUser ? { userId: nextUser.id, user: nextUser } : {}),
+              }
+            : a))
     );
-    const res = await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt }) });
+    const res = await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt, layers }) });
     invalidateLists();
     if (!res.ok) load();
   }

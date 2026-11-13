@@ -38,7 +38,7 @@ function dayLabel(dateStr: string) {
 
 function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove, onEdit, onReassign, onPin, dragHandleProps, isDragOverlay, dirtAsOf }: {
   assignment: Assignment; users: User[]; meId?: string;
-  onComplete?: (id: string, by: string | null, date?: string) => void;
+  onComplete?: (id: string, by: string | null, date?: string, layers?: ("base" | "addon" | "addon2")[]) => void;
   onUncomplete?: (id: string) => void;
   onRemove?: (id: string) => void;
   onEdit?: (task: Task) => void;
@@ -164,8 +164,10 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
       {showWho && (
         <CompleteAsMenu
           users={users}
+          task={assignment.task}
+          meId={meId}
           defaultDate={assignment.date}
-          onPick={(userId, date) => { onComplete?.(assignment.id, userId, date); setShowWho(false); }}
+          onPick={(userId, date, layers) => { onComplete?.(assignment.id, userId, date, layers); setShowWho(false); }}
           onClose={() => setShowWho(false)}
         />
       )}
@@ -266,21 +268,31 @@ export default function UpcomingPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function complete(assignmentId: string, completedById: string | null, completedAt?: string) {
+  async function complete(assignmentId: string, completedById: string | null, completedAt?: string, layers?: ("base" | "addon" | "addon2")[]) {
     const day = completedAt ?? days[0];
     const stamp = `${day}T12:00:00`;
+    const onlyPart = Boolean(layers?.length) && !layers?.includes("base");
     const nextUser = completedById ? users.find((u) => u.id === completedById) : undefined;
     setAssignments((prev) =>
       prev.map((a) => (a.id === assignmentId
-        ? {
-            ...a,
-            completedAt: stamp,
-            date: day,
-            ...(nextUser ? { userId: nextUser.id, user: nextUser } : {}),
-          }
+        ? onlyPart
+          ? {
+              ...a,
+              task: {
+                ...a.task,
+                ...(layers?.includes("addon") ? { addonLastDoneAt: stamp } : {}),
+                ...(layers?.includes("addon2") ? { addon2LastDoneAt: stamp } : {}),
+              },
+            }
+          : {
+              ...a,
+              completedAt: stamp,
+              date: day,
+              ...(nextUser ? { userId: nextUser.id, user: nextUser } : {}),
+            }
         : a))
     );
-    const res = await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt: day }) });
+    const res = await fetch("/api/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId, completedById, completedAt: day, layers }) });
     invalidateLists();
     if (!res.ok) load();
   }

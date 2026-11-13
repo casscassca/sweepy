@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import { completeAssignment, completeTask, uncompleteAssignment, uncompleteTask } from "@/lib/complete";
+import type { CleanerLayer } from "@/lib/cleaner";
+
+function layersFrom(raw: unknown): CleanerLayer[] | null {
+  if (!Array.isArray(raw)) return null;
+  const layers = raw.filter((layer): layer is CleanerLayer => layer === "base" || layer === "addon" || layer === "addon2");
+  return layers.length > 0 ? layers : null;
+}
 
 function completedAtFrom(raw: unknown) {
   if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
@@ -12,14 +19,15 @@ function completedAtFrom(raw: unknown) {
 }
 
 export async function POST(req: Request) {
-  const { assignmentId, taskId, completedById, completedAt: rawDate } = await req.json();
+  const { assignmentId, taskId, completedById, completedAt: rawDate, layers: rawLayers } = await req.json();
   const completedAt = completedAtFrom(rawDate);
   const date = typeof rawDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : undefined;
   const by = typeof completedById === "string" && completedById ? completedById : null;
+  const layers = layersFrom(rawLayers);
   const result = typeof assignmentId === "string" && assignmentId
-    ? await completeAssignment({ assignmentId, completedById: by, completedAt, date })
+    ? await completeAssignment({ assignmentId, completedById: by, completedAt, date, layers })
     : typeof taskId === "string" && taskId
-      ? await completeTask({ taskId, completedById: by, completedAt, date })
+      ? await completeTask({ taskId, completedById: by, completedAt, date, layers })
       : { ok: false as const, status: 400 as const, reason: "taskId or assignmentId required" };
   if (!result.ok) return NextResponse.json(result, { status: result.status });
   return NextResponse.json({ ok: true });
