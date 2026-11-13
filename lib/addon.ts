@@ -50,20 +50,27 @@ export function isAddon2Due(task: AddonFields, asOf: Date = new Date()) {
   return layerDue(task.addon2LastDoneAt, task.addon2FrequencyDays, asOf, 1);
 }
 
+function baseRatio(task: AddonFields, asOf: Date) {
+  return dirtinessRatio(task.lastDoneAt ?? null, task.frequencyDays ?? 0, asOf);
+}
+
+/**
+ * Due, overdue, and list visibility follow the base chore only. A due add-on
+ * waits and is folded into the name the next time that schedule comes up.
+ */
 export function isCatchUpTask(task: AddonFields, asOf?: Date) {
   const when = asOf ?? new Date();
-  if (dirtinessRatio(task.lastDoneAt ?? null, task.frequencyDays ?? 0, when) > 1) return true;
-  if (hasAddon(task) && dirtinessRatio(task.addonLastDoneAt ?? null, task.addonFrequencyDays ?? 0, when) > 1) return true;
-  if (hasAddon2(task) && dirtinessRatio(task.addon2LastDoneAt ?? null, task.addon2FrequencyDays ?? 0, when) > 1) return true;
-  return false;
+  return baseRatio(task, when) > 1;
 }
 
 export function isDueToday(task: AddonFields, asOf?: Date) {
   const when = asOf ?? new Date();
   if (isCatchUpTask(task, when)) return false;
-  return dirtinessRatio(task.lastDoneAt ?? null, task.frequencyDays ?? 0, when) >= 1
-    || isAddonDue(task, when)
-    || isAddon2Due(task, when);
+  return baseRatio(task, when) >= 1;
+}
+
+export function isTaskEligible(task: AddonFields, asOf: Date = new Date()) {
+  return isDirtyEnough(task.lastDoneAt ?? null, task.frequencyDays ?? 0, asOf, task.dueOnly);
 }
 
 function addonLabel(task: AddonFields) {
@@ -130,12 +137,6 @@ export function displayTaskDifficulty(task: AddonFields, asOf: Date = new Date()
   if (isAddon2Due(task, asOf)) return Math.min(3, difficulty + extraPoints(task, true));
   if (isAddonDue(task, asOf)) return Math.min(3, difficulty + extraPoints(task, false));
   return difficulty;
-}
-
-export function isTaskEligible(task: AddonFields, asOf: Date = new Date()) {
-  return isDirtyEnough(task.lastDoneAt ?? null, task.frequencyDays ?? 0, asOf, task.dueOnly)
-    || isAddonDue(task, asOf)
-    || isAddon2Due(task, asOf);
 }
 
 export function addonDetail(task: AddonFields) {

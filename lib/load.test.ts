@@ -19,6 +19,29 @@ describe("catch-up load", () => {
     assert.equal(load.catchUp.pts, 2);
   });
 
+  it("does not count a chore as catch-up when only an add-on is overdue", () => {
+    const asOf = new Date("2026-11-13T12:00:00-06:00");
+    const load = householdLoad(
+      [{
+        difficulty: 1,
+        frequencyDays: 3,
+        lastDoneAt: new Date("2026-11-11T12:00:00-06:00"),
+        addonName: "clean setup",
+        addonFrequencyDays: 6,
+        addonPoints: 1,
+        addonLastDoneAt: new Date("2026-11-06T12:00:00-06:00"),
+        addon2Name: "replace food/water filters",
+        addon2FrequencyDays: 30,
+        addon2Points: 1,
+        addon2LastDoneAt: new Date("2026-10-14T12:00:00-06:00"),
+      }],
+      [{ dailyCapacity: 6, dailyTaskLimit: 4 }],
+      asOf,
+    );
+    assert.equal(load.catchUp.tasks, 0);
+    assert.equal(load.catchUp.pts, 0);
+  });
+
   it("does not treat due-today as catch-up", () => {
     const asOf = new Date("2026-08-19T12:00:00-05:00");
     const load = householdLoad(
