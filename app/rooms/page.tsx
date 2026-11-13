@@ -12,7 +12,7 @@ import { dirtDetail, dirtinessRatio } from "@/lib/dirtiness";
 import { invalidateLists, loadJson } from "@/lib/api-cache";
 import { uiDirtAsOf } from "@/lib/vacation";
 
-type User = { id: string; name: string; color: string };
+type User = { id: string; name: string; color: string; cleaner?: boolean };
 type Task = {
   id: string;
   name: string;
@@ -22,6 +22,7 @@ type Task = {
   allowedDays: string | null;
   important?: boolean;
   dueOnly?: boolean;
+  hideFromCleaner?: boolean;
   notes?: string;
   addonName?: string;
   addonFrequencyDays?: number;

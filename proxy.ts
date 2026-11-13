@@ -19,6 +19,7 @@ function isPublic(pathname: string): boolean {
   if (pathname === "/icon-192.png" || pathname === "/icon-512.png" || pathname === "/icon-monochrome.png") return true;
   if (pathname === "/icon-cluster-192.png" || pathname === "/icon-cluster-512.png") return true;
   if (pathname === "/mascot.png" || pathname === "/favicon.png") return true;
+  if (pathname === "/clean" || pathname.startsWith("/api/clean")) return true;
   return false;
 }
 

@@ -15,7 +15,8 @@ import { assignmentDifficulty, assignmentLabel } from "@/lib/addon";
 import { useHideDone } from "@/lib/hide-done";
 import { invalidateLists, loadJson } from "@/lib/api-cache";
 
-type User = { id: string; name: string; color: string; dailyTaskLimit?: number };
+type User = { id: string; name: string; color: string; dailyTaskLimit?: number; cleaner?: boolean };
+type CleanerNote = { id: string; body: string; createdAt: string };
 type Task = { id: string; name: string; difficulty: number; oneOff?: boolean; important?: boolean; notes?: string; addonName?: string; addonFrequencyDays?: number; addonPoints?: number; addonLastDoneAt?: string | null; addon2Name?: string; addon2FrequencyDays?: number; addon2Points?: number; addon2LastDoneAt?: string | null; lastDoneAt?: string | null; frequencyDays?: number; dueOnly?: boolean; room: { name: string } | null };
 type Assignment = { id: string; userId: string; order: number; completedAt: string | null; pinned?: boolean; task: Task; user: User };
 
@@ -119,7 +120,7 @@ function SortableItem({ assignment, users, meId, onComplete, onUncomplete, onRem
       {showAssign && (
         <PersonMenu
           title="Give to"
-          users={users}
+          users={users.filter((u) => !u.cleaner)}
           selectedId={assignment.userId}
           onPick={(id, date) => onReassign(assignment.id, id, date)}
           onClose={() => setShowAssign(false)}
@@ -136,9 +137,12 @@ export default function TodayPage() {
   const [running, setRunning] = useState(false);
   const [adding, setAdding] = useState(false);
   const [hideDone, setHideDone] = useHideDone();
+  const [cleanerNotes, setCleanerNotes] = useState<CleanerNote[]>([]);
   const today = format(new Date(), "yyyy-MM-dd");
+  const household = users.filter((u) => !u.cleaner);
+  const columns = users.filter((u) => !u.cleaner || assignments.some((a) => a.userId === u.id));
 
-  const grouped = users.map((u) => {
+  const grouped = columns.map((u) => {
     const all = assignments.filter((a) => a.userId === u.id).sort((a, b) => {
       const aImp = !a.completedAt && a.task.important ? 1 : 0;
       const bImp = !b.completedAt && b.task.important ? 1 : 0;
@@ -161,6 +165,7 @@ export default function TodayPage() {
       loadJson<Assignment[]>(`/api/assignments?date=${today}`, [], (a) => setAssignments(Array.isArray(a) ? a : [])),
       loadJson<User[]>("/api/users", [], (u) => setUsers(Array.isArray(u) ? u : [])),
       loadJson<{ user?: { id: string } }>("/api/auth/me", {}, (me) => setMeId(me.user?.id)),
+      loadJson<CleanerNote[]>("/api/clean/notes", [], (notes) => setCleanerNotes(Array.isArray(notes) ? notes : [])),
     ]);
   }
 
@@ -301,6 +306,28 @@ export default function TodayPage() {
         </div>
       </div>
 
+      {cleanerNotes.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {cleanerNotes.map((note) => (
+            <div key={note.id} className="rounded-xl px-3 py-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+              <p className="text-xs mb-1" style={{ color: "var(--text3)" }}>Cleaner also did</p>
+              <p className="text-sm whitespace-pre-wrap">{note.body}</p>
+              <button
+                type="button"
+                className="text-xs mt-2"
+                style={{ color: "var(--text3)" }}
+                onClick={async () => {
+                  setCleanerNotes((prev) => prev.filter((row) => row.id !== note.id));
+                  await fetch("/api/clean/notes", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: note.id }) });
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {total > 0 && (
         <div className="mb-6 h-1 rounded-full overflow-hidden" style={{ background: "var(--surface2)" }}>
           <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: pct === 100 ? "var(--green)" : "var(--accent)" }} />
@@ -343,7 +370,7 @@ export default function TodayPage() {
         <AddToDaySheet
           date={today}
           title="Add to today"
-          users={users}
+          users={household}
           defaultUserId={meId}
           onClose={() => setAdding(false)}
           onAdded={() => { invalidateLists(); load(); }}

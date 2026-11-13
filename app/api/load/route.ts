@@ -23,6 +23,7 @@ export async function GET() {
       },
     }),
     prisma.user.findMany({
+      where: { cleaner: false },
       select: {
         dailyCapacity: true,
         dailyTaskLimit: true,

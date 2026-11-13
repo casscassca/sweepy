@@ -11,7 +11,7 @@ import { uiDirtAsOf } from "@/lib/vacation";
 export { formatFrequency } from "@/lib/frequency";
 
 export type TaskFormRoom = { id: string; name: string; icon: string };
-export type TaskFormUser = { id: string; name: string; color: string };
+export type TaskFormUser = { id: string; name: string; color: string; cleaner?: boolean };
 export type TaskFormTask = {
   id: string;
   name: string;
@@ -21,6 +21,7 @@ export type TaskFormTask = {
   allowedDays: string | null;
   important?: boolean;
   dueOnly?: boolean;
+  hideFromCleaner?: boolean;
   notes?: string;
   roomId?: string | null;
   addonName?: string;
@@ -47,6 +48,7 @@ export function parseTaskForm(form: HTMLFormElement) {
   const lastDone = lastDoneAtFromRatio(dirtRatio, frequencyDays);
   const important = (form.elements.namedItem("important") as HTMLInputElement)?.checked ?? false;
   const dueOnly = (form.elements.namedItem("dueOnly") as HTMLInputElement)?.checked ?? false;
+  const hideFromCleaner = (form.elements.namedItem("hideFromCleaner") as HTMLInputElement)?.checked ?? false;
   const notes = ((form.elements.namedItem("notes") as HTMLTextAreaElement)?.value ?? "").trim();
   const roomField = form.elements.namedItem("roomId") as HTMLSelectElement | null;
   const roomId = roomField ? (roomField.value || null) : undefined;
@@ -81,6 +83,7 @@ export function parseTaskForm(form: HTMLFormElement) {
     lastDoneAt: lastDone ? lastDone.toISOString() : null,
     important,
     dueOnly,
+    hideFromCleaner,
     notes,
     ...(roomId !== undefined ? { roomId } : {}),
     addonName,
@@ -171,6 +174,15 @@ export default function TaskFormFields({
           Only when due
           <span className="block text-xs font-normal mt-0.5" style={{ color: "var(--text3)" }}>
             Shows on the due day — won’t get pulled forward to fill an earlier list
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2.5 text-sm cursor-pointer">
+        <input type="checkbox" name="hideFromCleaner" defaultChecked={task?.hideFromCleaner ?? false} className="mt-0.5" />
+        <span>
+          Don’t show for the cleaner
+          <span className="block text-xs font-normal mt-0.5" style={{ color: "var(--text3)" }}>
+            Leaves this off the list you send the cleaner
           </span>
         </span>
       </label>
@@ -392,7 +404,7 @@ export default function TaskFormFields({
             Who can do this? <span style={{ color: "var(--text3)" }}>(blank = anyone)</span>
           </label>
           <div className="flex flex-wrap gap-3">
-            {users.map((u) => {
+            {users.filter((u) => !u.cleaner).map((u) => {
               const checked = task?.assignableUsers.some((au) => au.user.id === u.id) ?? false;
               return (
                 <label key={u.id} className="flex items-center gap-1.5 text-sm cursor-pointer">

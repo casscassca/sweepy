@@ -7,7 +7,7 @@ import { dropCleanUnheldAssignments } from "@/lib/scheduler";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { name, roomId, difficulty, frequencyDays, allowedDays, assignableUserIds, lastDoneAt, important, dueOnly, notes, addonName, addonFrequencyDays, addonPoints, addonLastDoneAt, addon2Name, addon2FrequencyDays, addon2Points, addon2LastDoneAt } = await req.json();
+  const { name, roomId, difficulty, frequencyDays, allowedDays, assignableUserIds, lastDoneAt, important, dueOnly, hideFromCleaner, notes, addonName, addonFrequencyDays, addonPoints, addonLastDoneAt, addon2Name, addon2FrequencyDays, addon2Points, addon2LastDoneAt } = await req.json();
   const addon = addonName !== undefined
     ? addonFields({ addonName, addonFrequencyDays, addonPoints, addonLastDoneAt, addon2Name, addon2FrequencyDays, addon2Points, addon2LastDoneAt })
     : null;
@@ -33,6 +33,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(lastDoneAt !== undefined && { lastDoneAt: lastDoneAt ? new Date(lastDoneAt) : null }),
       ...(important !== undefined && { important: Boolean(important) }),
       ...(dueOnly !== undefined && { dueOnly: Boolean(dueOnly) }),
+      ...(hideFromCleaner !== undefined && { hideFromCleaner: Boolean(hideFromCleaner) }),
       ...(notes !== undefined && { notes: typeof notes === "string" ? notes.trim().slice(0, 2000) : "" }),
       ...(addon && addon),
     },

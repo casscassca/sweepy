@@ -191,6 +191,7 @@ async function handOffToSomeoneWithRoom(opts: {
  */
 export async function enforceCapacity(fromDate = todayStr(), horizon = 21) {
   const users = await prisma.user.findMany({
+    where: { cleaner: false },
     select: {
       id: true,
       dailyCapacity: true,
@@ -467,6 +468,7 @@ async function placeDueOnlyOnDueDays(fromDate: string, horizon: number, onlyDate
       include: { assignableUsers: true },
     }),
     prisma.user.findMany({
+      where: { cleaner: false },
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
@@ -642,7 +644,7 @@ export async function addTaskToDate(
   if (task.oneOff) return { ok: false as const, status: 400, reason: "one-off" };
   const landing = nextAllowedOnOrAfter(task.allowedDays, date) ?? date;
 
-  const people = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true } });
+  const people = await prisma.user.findMany({ where: { cleaner: false }, orderBy: { createdAt: "asc" }, select: { id: true } });
   const allowed = task.assignableUsers.length > 0
     ? task.assignableUsers.map((a) => a.userId)
     : people.map((u) => u.id);
@@ -746,7 +748,7 @@ export async function runDailyAssignment(
       where: { oneOff: false },
       include: { assignableUsers: { include: { user: true } } },
     }),
-    prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.user.findMany({ where: { cleaner: false }, orderBy: { createdAt: "asc" } }),
     prisma.dailyAssignment.findMany({
       where: { date, parked: false },
       include: { task: { select: { difficulty: true, lastDoneAt: true, frequencyDays: true, oneOff: true, dueOnly: true, addonName: true, addonFrequencyDays: true, addonPoints: true, addonLastDoneAt: true, addon2Name: true, addon2FrequencyDays: true, addon2Points: true, addon2LastDoneAt: true } } },
@@ -1137,7 +1139,7 @@ export async function sendDueReminders() {
 
 export async function sendNotificationsForTime(timeStr: string) {
   const users = await prisma.user.findMany({
-    where: { notifyTime: timeStr, haNotifyTarget: { not: "" } },
+    where: { cleaner: false, notifyTime: timeStr, haNotifyTarget: { not: "" } },
   });
   if (users.length === 0) return;
 
@@ -1157,7 +1159,7 @@ export async function sendNotificationsForTime(timeStr: string) {
 
 export async function sendNudgesForTime(timeStr: string) {
   const users = await prisma.user.findMany({
-    where: { nudgeTime: timeStr, haNotifyTarget: { not: "" } },
+    where: { cleaner: false, nudgeTime: timeStr, haNotifyTarget: { not: "" } },
   });
   if (users.length === 0) return;
 

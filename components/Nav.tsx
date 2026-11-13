@@ -28,7 +28,7 @@ export default function Nav() {
   }
 
   // The login page has no nav.
-  if (path === "/login") return null;
+  if (path === "/login" || path === "/clean") return null;
 
   return (
     <>

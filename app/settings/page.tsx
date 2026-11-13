@@ -50,17 +50,22 @@ export default function SettingsPage() {
   const [load, setLoad] = useState<LoadStatus | null>(null);
   const [backupAt, setBackupAt] = useState<string | null>(null);
   const [backupLoaded, setBackupLoaded] = useState(false);
+  const [cleanerCodeInput, setCleanerCodeInput] = useState("");
+  const [cleanerLink, setCleanerLink] = useState("");
+  const [cleanerMsg, setCleanerMsg] = useState("");
 
   useEffect(() => {
     setWebhookUrl(`${window.location.origin}/api/ha-webhook`);
+    setCleanerLink(`${window.location.origin}/clean`);
     setDarkMode(document.documentElement.getAttribute("data-theme") === "dark");
     fetch("/api/ha-status")
       .then((res) => res.ok ? res.json() : null)
       .then(setHa)
       .catch(() => setHa(null));
     void loadJson<LoadStatus | null>("/api/load", null, (data) => setLoad(data?.week ? data : null));
-    void loadJson<{ backupAt?: string | null }>("/api/settings", {}, (s) => {
+    void loadJson<{ backupAt?: string | null; cleanerCode?: string }>("/api/settings", {}, (s) => {
       setBackupAt(s.backupAt ?? null);
+      setCleanerCodeInput(s.cleanerCode ?? "");
       setBackupLoaded(true);
     });
   }, []);
@@ -105,6 +110,45 @@ export default function SettingsPage() {
           </button>
         </div>
         {load && <WorkloadCard load={load} />}
+      </div>
+
+      <div className="p-5 rounded-2xl mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
+        <h2 className="font-medium mb-1">Cleaner</h2>
+        <p className="text-sm mb-3" style={{ color: "var(--text2)" }}>
+          Send this link. The code works from anywhere, and their phone remembers it.
+        </p>
+        <p className="text-sm font-mono break-all mb-3" style={{ color: "var(--text)" }}>{cleanerLink}</p>
+        <form
+          className="flex gap-2 items-center"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setCleanerMsg("");
+            const res = await fetch("/api/settings", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ cleanerCode: cleanerCodeInput }),
+            });
+            if (!res.ok) {
+              setCleanerMsg("Use a 4-digit code, or leave it blank to turn the page off");
+              return;
+            }
+            setCleanerMsg(cleanerCodeInput ? "Saved" : "Turned off");
+          }}
+        >
+          <input
+            inputMode="numeric"
+            maxLength={4}
+            value={cleanerCodeInput}
+            onChange={(e) => setCleanerCodeInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="4-digit code"
+            aria-label="Cleaner code"
+            className="w-32"
+          />
+          <button type="submit" className="px-3.5 py-2 rounded-xl text-sm font-medium text-white" style={{ background: "var(--accent)" }}>
+            Save
+          </button>
+        </form>
+        {cleanerMsg && <p className="text-xs mt-2" style={{ color: "var(--text3)" }}>{cleanerMsg}</p>}
       </div>
 
       <div className="p-5 rounded-2xl mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
