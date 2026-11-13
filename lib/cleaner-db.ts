@@ -12,6 +12,16 @@ import { cookies } from "next/headers";
 export const CLEANER_COOKIE = "sweepy_cleaner";
 export { SESSION_TTL_SECONDS };
 
+/** The first household account. The Cleaner person the app creates is not an owner. */
+export async function accountOwnerId() {
+  const owner = await prisma.user.findFirst({
+    where: { cleaner: false },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  return owner?.id ?? null;
+}
+
 export async function ensureCleaner() {
   const existing = await prisma.user.findFirst({ where: { cleaner: true }, orderBy: { createdAt: "asc" } });
   if (existing) return existing;

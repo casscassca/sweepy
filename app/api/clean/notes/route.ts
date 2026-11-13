@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/auth";
-import { hasCleanerAccess } from "@/lib/cleaner-db";
+import { accountOwnerId, hasCleanerAccess } from "@/lib/cleaner-db";
 import { prisma } from "@/lib/prisma";
 
-/** The first household account, skipping the Cleaner person the app creates. */
 async function isOwner(userId: string) {
-  const owner = await prisma.user.findFirst({
-    where: { cleaner: false },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-  return owner?.id === userId;
+  return (await accountOwnerId()) === userId;
 }
 
 export async function GET() {
