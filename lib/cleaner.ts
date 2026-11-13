@@ -43,31 +43,42 @@ function doneOn(at: Date | string | null | undefined, today: string) {
   return calendarDayStr(at) === today;
 }
 
+/** First letter only, so "mop floors" becomes "Mop floors". */
+export function capitalizeFirst(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return "";
+  return trimmed.charAt(0).toLocaleUpperCase() + trimmed.slice(1);
+}
+
 export function linesForCleaner(
   task: AddonFields & { id: string; hideFromCleaner?: boolean; oneOff?: boolean },
   today: string,
 ): CleanerLine[] {
   if (task.oneOff || task.hideFromCleaner) return [];
-  const lines: CleanerLine[] = [{
-    taskId: task.id,
-    layer: "base",
-    name: task.name ?? "",
-    done: doneOn(task.lastDoneAt, today),
-  }];
-  if (hasAddon(task)) {
+  const lines: CleanerLine[] = [];
+  // Already done today stays off the list. The cleaner does not see household check-offs.
+  if (!doneOn(task.lastDoneAt, today)) {
+    lines.push({
+      taskId: task.id,
+      layer: "base",
+      name: capitalizeFirst(task.name ?? ""),
+      done: false,
+    });
+  }
+  if (hasAddon(task) && !doneOn(task.addonLastDoneAt, today)) {
     lines.push({
       taskId: task.id,
       layer: "addon",
-      name: (task.addonName ?? "").trim(),
-      done: doneOn(task.addonLastDoneAt, today),
+      name: capitalizeFirst(task.addonName ?? ""),
+      done: false,
     });
   }
-  if (hasAddon2(task)) {
+  if (hasAddon2(task) && !doneOn(task.addon2LastDoneAt, today)) {
     lines.push({
       taskId: task.id,
       layer: "addon2",
-      name: (task.addon2Name ?? "").trim(),
-      done: doneOn(task.addon2LastDoneAt, today),
+      name: capitalizeFirst(task.addon2Name ?? ""),
+      done: false,
     });
   }
   return lines;

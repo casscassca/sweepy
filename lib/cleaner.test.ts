@@ -42,18 +42,50 @@ describe("cleaner checklist", () => {
     addon2LastDoneAt: null,
   };
 
-  it("lists every chore in the room, with each add-on on its own line", () => {
+  it("lists the chore and both add-ons, and capitalizes only the first letter", () => {
+    const open = {
+      ...vacuum,
+      name: "sweep floors",
+      addonName: "mop",
+      addonLastDoneAt: new Date("2026-11-01T12:00:00-06:00"),
+      addon2Name: "baseboards",
+    };
     const sections = cleanerChecklist(
-      [{ id: "kitchen", name: "Kitchen", icon: "🍳", tasks: [vacuum] }],
+      [{ id: "kitchen", name: "Kitchen", icon: "🍳", tasks: [open] }],
       [],
       today,
     );
-    assert.equal(sections.length, 1);
-    assert.deepEqual(sections[0].lines.map((line) => [line.name, line.layer, line.done]), [
-      ["Vacuum", "base", false],
-      ["mop", "addon", true],
-      ["baseboards", "addon2", false],
+    assert.deepEqual(sections[0].lines.map((line) => [line.name, line.layer]), [
+      ["Sweep floors", "base"],
+      ["Mop", "addon"],
+      ["Baseboards", "addon2"],
     ]);
+  });
+
+  it("leaves off a line already done today, and the room if nothing is left", () => {
+    const finished = {
+      ...vacuum,
+      lastDoneAt: new Date("2026-11-13T08:00:00-06:00"),
+      addonLastDoneAt: new Date("2026-11-13T08:00:00-06:00"),
+      addon2LastDoneAt: new Date("2026-11-13T08:00:00-06:00"),
+    };
+    assert.deepEqual(linesForCleaner(finished, today), []);
+    const sections = cleanerChecklist(
+      [{ id: "kitchen", name: "Kitchen", icon: "🍳", tasks: [finished] }],
+      [],
+      today,
+    );
+    assert.deepEqual(sections, []);
+  });
+
+  it("drops a room when every chore in it is hidden", () => {
+    const hidden = { ...vacuum, hideFromCleaner: true };
+    const sections = cleanerChecklist(
+      [{ id: "kitchen", name: "Kitchen", icon: "🍳", tasks: [hidden] }],
+      [],
+      today,
+    );
+    assert.deepEqual(sections, []);
   });
 
   it("leaves off a chore marked hidden, and still shows the rest of the room", () => {
@@ -65,7 +97,7 @@ describe("cleaner checklist", () => {
       [],
       today,
     );
-    assert.equal(sections[0].lines[0].name, "Vacuum");
+    assert.deepEqual(sections[0].lines.map((line) => line.name), ["Vacuum", "Baseboards"]);
   });
 
   it("names an add-on completion as just that add-on", () => {
