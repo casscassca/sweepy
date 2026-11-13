@@ -1,8 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mergeHistoryPage } from "./history";
+import { bothHistoryPeople, mergeHistoryPage } from "./history";
 
 const at = (iso: string) => new Date(iso);
+
+describe("history both", () => {
+  it("uses the household people and leaves the cleaner out", () => {
+    const people = bothHistoryPeople([
+      { name: "Cass", cleaner: false },
+      { name: "Cleaner", cleaner: true },
+      { name: "Jason", cleaner: false },
+    ]);
+    assert.deepEqual(people.map((person) => person.name), ["Cass", "Jason"]);
+  });
+});
 
 describe("history page", () => {
   it("mixes cleaner notes into the completion log, newest first", () => {

@@ -5,8 +5,9 @@ import Link from "next/link";
 import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
 import { getJson, invalidateApi, invalidateLists } from "@/lib/api-cache";
 import { cleanerCompletionName } from "@/lib/cleaner";
+import { bothHistoryPeople } from "@/lib/history";
 
-type Person = { id: string; name: string; color: string };
+type Person = { id: string; name: string; color: string; cleaner?: boolean };
 type CompletionEntry = {
   kind?: "completion";
   id: string;
@@ -215,7 +216,7 @@ export default function HistoryPage() {
                               ) : (
                                 <>
                                   <span className="flex items-center shrink-0">
-                                    {users.slice(0, 2).map((u, i) => (
+                                    {bothHistoryPeople(users).map((u, i) => (
                                       <span
                                         key={u.id}
                                         className="w-1.5 h-1.5 rounded-full"
