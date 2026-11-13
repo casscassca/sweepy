@@ -1,7 +1,6 @@
 import { format } from "date-fns";
 import { laterInstant } from "./dates";
-import { previousLayerStamp, type CleanerLayer } from "./cleaner";
-import { isAddon2Due, isAddonDue } from "./addon";
+import { completionLayers, previousLayerStamp, type CleanerLayer } from "./cleaner";
 import { publishHaMqttTaskEvent, scheduleHaMqttSync } from "./ha-mqtt";
 import {
   isFilterAddonTask,
@@ -16,11 +15,13 @@ export async function completeAssignment(opts: {
   completedById?: string | null;
   completedAt: Date;
   date?: string;
+  layers?: CleanerLayer[] | null;
 }) {
   let id = opts.assignmentId;
   const current = await prisma.dailyAssignment.findUnique({ where: { id } });
   if (!current) return { ok: false as const, status: 404 as const, reason: "not found" };
-  if (current.completedAt) return { ok: true as const, assignment: current, alreadyDone: true as const };
+  const onlyAddon = Boolean(opts.layers?.length) && !opts.layers?.includes("base");
+  if (current.completedAt && !onlyAddon) return { ok: true as const, assignment: current, alreadyDone: true as const };
 
   if (opts.date && opts.date !== current.date) {
     const moved = await holdAssignmentOnDate(id, opts.date, { respectAllowed: false });
@@ -33,50 +34,57 @@ export async function completeAssignment(opts: {
     ? opts.completedById
     : null;
 
-  const assignment = await prisma.dailyAssignment.update({
-    where: { id },
-    data: {
-      completedAt: opts.completedAt,
-      completedById,
-      remindAt: null,
-      ...(completedById ? { userId: completedById } : {}),
-    },
-  });
+  const task = await prisma.task.findUnique({ where: { id: current.taskId } });
+  const layers = task ? completionLayers(task, opts.completedAt, opts.layers) : ["base" as const];
+  const includeBase = layers.includes("base");
 
-  const task = await prisma.task.findUnique({ where: { id: assignment.taskId } });
-  const stacked = task ? isAddon2Due(task, opts.completedAt) : false;
-  const mopped = stacked || (task ? isAddonDue(task, opts.completedAt) : false);
-  await prisma.task.update({
-    where: { id: assignment.taskId },
-    data: {
-      lastDoneAt: laterInstant(task?.lastDoneAt, opts.completedAt),
-      ...(mopped && { addonLastDoneAt: laterInstant(task?.addonLastDoneAt, opts.completedAt) }),
-      ...(stacked && { addon2LastDoneAt: laterInstant(task?.addon2LastDoneAt, opts.completedAt) }),
-    },
-  });
-
-  await prisma.completionLog.create({
-    data: {
+  let assignment = current;
+  if (includeBase && !current.completedAt) {
+    assignment = await prisma.dailyAssignment.update({
+      where: { id },
+      data: {
+        completedAt: opts.completedAt,
+        completedById,
+        remindAt: null,
+        ...(completedById ? { userId: completedById } : {}),
+      },
+    });
+    void dismissAssignmentNotify(opts.assignmentId);
+    if (assignment.id !== opts.assignmentId) void dismissAssignmentNotify(assignment.id);
+    void publishHaMqttTaskEvent({
+      kind: "completed",
       taskId: assignment.taskId,
+      completedAt: opts.completedAt,
       userId: assignment.userId,
       completedById,
-      completedAt: opts.completedAt,
-    },
-  });
+    });
+  }
 
-  void dismissAssignmentNotify(opts.assignmentId);
-  if (assignment.id !== opts.assignmentId) void dismissAssignmentNotify(assignment.id);
+  if (task) {
+    await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        ...(layers.includes("base") && { lastDoneAt: laterInstant(task.lastDoneAt, opts.completedAt) }),
+        ...(layers.includes("addon") && { addonLastDoneAt: laterInstant(task.addonLastDoneAt, opts.completedAt) }),
+        ...(layers.includes("addon2") && { addon2LastDoneAt: laterInstant(task.addon2LastDoneAt, opts.completedAt) }),
+      },
+    });
+    const userId = assignment.userId;
+    for (const layer of layers) {
+      await prisma.completionLog.create({
+        data: {
+          taskId: task.id,
+          userId,
+          completedById,
+          completedAt: opts.completedAt,
+          layer,
+        },
+      });
+    }
+    if (layers.includes("addon2")) void syncRfidDesiccantOnFilterComplete(task, opts.completedAt);
+  }
 
-  void publishHaMqttTaskEvent({
-    kind: "completed",
-    taskId: assignment.taskId,
-    completedAt: opts.completedAt,
-    userId: assignment.userId,
-    completedById,
-  });
-
-  if (task) void syncRfidDesiccantOnFilterComplete(task, opts.completedAt);
-
+  scheduleHaMqttSync();
   return { ok: true as const, assignment };
 }
 
@@ -86,7 +94,39 @@ export async function completeTask(opts: {
   completedById?: string | null;
   completedAt: Date;
   date?: string;
+  layers?: CleanerLayer[] | null;
 }) {
+  const task = await prisma.task.findUnique({ where: { id: opts.taskId } });
+  const layers = task ? completionLayers(task, opts.completedAt, opts.layers) : ["base" as const];
+  if (task && !layers.includes("base")) {
+    const open = await prisma.dailyAssignment.findFirst({
+      where: { taskId: task.id, completedAt: null },
+      orderBy: { date: "asc" },
+    });
+    const userId = opts.completedById || open?.userId;
+    if (!userId) return { ok: false as const, status: 422 as const, reason: "no one to credit" };
+    await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        ...(layers.includes("addon") && { addonLastDoneAt: laterInstant(task.addonLastDoneAt, opts.completedAt) }),
+        ...(layers.includes("addon2") && { addon2LastDoneAt: laterInstant(task.addon2LastDoneAt, opts.completedAt) }),
+      },
+    });
+    for (const layer of layers) {
+      await prisma.completionLog.create({
+        data: {
+          taskId: task.id,
+          userId,
+          completedById: opts.completedById ?? null,
+          completedAt: opts.completedAt,
+          layer,
+        },
+      });
+    }
+    if (layers.includes("addon2")) void syncRfidDesiccantOnFilterComplete(task, opts.completedAt);
+    scheduleHaMqttSync();
+    return { ok: true as const, assignment: open };
+  }
   const date = opts.date ?? format(opts.completedAt, "yyyy-MM-dd");
   const placed = await addTaskToDate(opts.taskId, date, opts.completedById ?? undefined);
   if (!placed.ok) return placed;
@@ -97,6 +137,7 @@ export async function completeTask(opts: {
     completedById: opts.completedById,
     completedAt: opts.completedAt,
     date,
+    layers,
   });
 }
 

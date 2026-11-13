@@ -5,6 +5,7 @@ import {
   cleanerCode,
   cleanerCodesMatch,
   cleanerCompletionName,
+  completionLayers,
   linesForCleaner,
   previousLayerStamp,
 } from "./cleaner";
@@ -70,6 +71,32 @@ describe("cleaner checklist", () => {
   it("names an add-on completion as just that add-on", () => {
     assert.equal(cleanerCompletionName(vacuum, "addon"), "mop");
     assert.equal(cleanerCompletionName(vacuum, "base"), "Vacuum");
+  });
+});
+
+describe("checking one part", () => {
+  const vacuum = {
+    name: "Vacuum",
+    frequencyDays: 7,
+    lastDoneAt: new Date("2026-11-12T12:00:00-06:00"),
+    addonName: "mop",
+    addonFrequencyDays: 14,
+    addonLastDoneAt: new Date("2026-10-30T12:00:00-06:00"),
+    addon2Name: "",
+    addon2FrequencyDays: 0,
+  };
+  const today = new Date("2026-11-13T12:00:00-06:00");
+
+  it("records only the vacuum when that is what was checked", () => {
+    assert.deepEqual(completionLayers(vacuum, today, ["base"]), ["base"]);
+  });
+
+  it("records only the mop when the vacuum was already done", () => {
+    assert.deepEqual(completionLayers(vacuum, today, ["addon"]), ["addon"]);
+  });
+
+  it("still records the base and a due add-on when the check does not say which part", () => {
+    assert.deepEqual(completionLayers(vacuum, today), ["base", "addon"]);
   });
 });
 

@@ -45,6 +45,15 @@ export function isAddonDue(task: AddonFields, asOf: Date = new Date()) {
   return layerDue(task.addonLastDoneAt, task.addonFrequencyDays, asOf, 1);
 }
 
+export function dueAddonParts(task: AddonFields, asOf: Date = new Date()) {
+  const parts: { layer: "base" | "addon" | "addon2"; name: string }[] = [
+    { layer: "base", name: task.name ?? "" },
+  ];
+  if (hasAddon(task) && isAddonDue(task, asOf)) parts.push({ layer: "addon", name: addonLabel(task) });
+  if (hasAddon2(task) && isAddon2Due(task, asOf)) parts.push({ layer: "addon2", name: addon2Label(task) });
+  return parts;
+}
+
 export function isAddon2Due(task: AddonFields, asOf: Date = new Date()) {
   if (!hasAddon2(task)) return false;
   return layerDue(task.addon2LastDoneAt, task.addon2FrequencyDays, asOf, 1);
@@ -115,6 +124,7 @@ export function assignmentLabel(task: AddonFields, completedAt?: Date | string |
     return stackedTaskName(task.name ?? "", addonLabel(task), addon2Label(task));
   }
   if (completedWithAddon(task, completedAt)) return comboTaskName(task.name ?? "", addonLabel(task));
+  if (completedAt) return task.name ?? "";
   return displayTaskName(task);
 }
 
@@ -129,6 +139,7 @@ export function assignmentDifficulty(task: AddonFields, completedAt?: Date | str
   const difficulty = task.difficulty ?? 1;
   if (completedWithAddon2(task, completedAt)) return Math.min(3, difficulty + extraPoints(task, true));
   if (completedWithAddon(task, completedAt)) return Math.min(3, difficulty + extraPoints(task, false));
+  if (completedAt) return difficulty;
   return displayTaskDifficulty(task);
 }
 

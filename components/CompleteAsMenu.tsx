@@ -2,18 +2,24 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { format } from "date-fns";
+import { dueAddonParts, type AddonFields } from "@/lib/addon";
 
 type Person = { id: string; name: string; color: string };
+type PartLayer = "base" | "addon" | "addon2";
 
 export default function CompleteAsMenu({
   users,
   defaultDate,
+  task,
+  meId,
   onPick,
   onClose,
 }: {
   users: Person[];
   defaultDate?: string;
-  onPick: (userId: string | null, date: string) => void;
+  task?: AddonFields;
+  meId?: string;
+  onPick: (userId: string | null, date: string, layers?: PartLayer[]) => void;
   onClose: () => void;
 }) {
   const today = format(new Date(), "yyyy-MM-dd");
@@ -46,7 +52,10 @@ export default function CompleteAsMenu({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [users.length, date]);
+  }, [users.length, date, task, meId]);
+
+  const parts = task && meId ? dueAddonParts(task, new Date(`${date}T12:00:00`)) : [];
+  const onePart = parts.length > 1;
 
   const menu = (
     <>
@@ -103,6 +112,21 @@ export default function CompleteAsMenu({
             </span>
             Both
           </button>
+        )}
+        {onePart && (
+          <div className="mt-1 pt-1" style={{ borderTop: "1px solid var(--border)" }}>
+            <p className="text-xs px-2 py-1" style={{ color: "var(--text3)" }}>Just one part</p>
+            {parts.map((part) => (
+              <button
+                key={part.layer}
+                type="button"
+                onClick={() => onPick(meId, date, [part.layer])}
+                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-black/5"
+              >
+                Just {part.name}
+              </button>
+            ))}
+          </div>
         )}
         <button type="button" onClick={onClose} className="w-full text-xs px-2 py-1 mt-0.5 rounded-lg" style={{ color: "var(--text3)" }}>
           Cancel

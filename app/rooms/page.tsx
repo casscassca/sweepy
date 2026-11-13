@@ -83,7 +83,7 @@ function CatalogTaskRow({
   onToday: boolean;
   adding: boolean;
   onAddToday: () => void;
-  onComplete: (by: string | null, date?: string) => void;
+  onComplete: (by: string | null, date?: string, layers?: ("base" | "addon" | "addon2")[]) => void;
   onUncomplete: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -178,7 +178,9 @@ function CatalogTaskRow({
       {showWho && (
         <CompleteAsMenu
           users={users}
-          onPick={(userId, date) => { onComplete(userId, date); setShowWho(false); }}
+          task={task}
+          meId={meId}
+          onPick={(userId, date, layers) => { onComplete(userId, date, layers); setShowWho(false); }}
           onClose={() => setShowWho(false)}
         />
       )}
@@ -315,18 +317,26 @@ export default function RoomsPage() {
     setAddingId(null);
   }
 
-  async function completeTask(taskId: string, completedById: string | null, completedAt?: string) {
+  async function completeTask(taskId: string, completedById: string | null, completedAt?: string, layers?: ("base" | "addon" | "addon2")[]) {
     const stamp = completedAt ? `${completedAt}T12:00:00` : new Date().toISOString();
+    const onlyPart = Boolean(layers?.length) && !layers?.includes("base");
     setRooms((prev) =>
       prev.map((room) => ({
         ...room,
-        tasks: room.tasks.map((t) => (t.id === taskId ? { ...t, lastDoneAt: stamp } : t)),
+        tasks: room.tasks.map((t) => (t.id === taskId
+          ? {
+              ...t,
+              ...(onlyPart ? {} : { lastDoneAt: stamp }),
+              ...(layers?.includes("addon") ? { addonLastDoneAt: stamp } : {}),
+              ...(layers?.includes("addon2") ? { addon2LastDoneAt: stamp } : {}),
+            }
+          : t)),
       }))
     );
     const res = await fetch("/api/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId, completedById, completedAt }),
+      body: JSON.stringify({ taskId, completedById, completedAt, layers }),
     });
     if (!res.ok) await load();
     else invalidateLists();
