@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { startOfWeek, startOfMonth, startOfYear } from "date-fns";
+import { calendarDayStr } from "@/lib/dates";
+import { cleanerLayerPoints, cleanerVisitSummary } from "@/lib/cleaner-points";
 
 async function pointsSince(userId: string, since: Date) {
   const logs = await prisma.completionLog.findMany({
@@ -16,7 +18,10 @@ export async function GET() {
   const monthStart = startOfMonth(now);
   const yearStart = startOfYear(now);
 
-  const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
+  const users = await prisma.user.findMany({
+    where: { cleaner: false },
+    orderBy: { createdAt: "asc" },
+  });
 
   const stats = await Promise.all(
     users.map(async (user: { id: string; name: string; color: string }) => {
@@ -29,5 +34,30 @@ export async function GET() {
     })
   );
 
-  return NextResponse.json(stats);
+  const cleaner = await prisma.user.findFirst({ where: { cleaner: true }, select: { id: true } });
+  let cleanerSummary = null;
+  if (cleaner) {
+    const logs = await prisma.completionLog.findMany({
+      where: { completedById: cleaner.id },
+      select: {
+        completedAt: true,
+        layer: true,
+        task: { select: { difficulty: true, addonPoints: true, addon2Points: true } },
+      },
+    });
+    cleanerSummary = cleanerVisitSummary(
+      logs.map((log) => ({
+        completedAt: log.completedAt,
+        points: cleanerLayerPoints({
+          layer: log.layer,
+          difficulty: log.task.difficulty,
+          addonPoints: log.task.addonPoints,
+          addon2Points: log.task.addon2Points,
+        }),
+      })),
+      calendarDayStr(),
+    );
+  }
+
+  return NextResponse.json({ people: stats, cleaner: cleanerSummary });
 }
