@@ -136,7 +136,10 @@ export default function CleanerList() {
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight mb-1">Cleaning</h1>
-      <p className="text-sm mb-6" style={{ color: "var(--text3)" }}>Check what you finished, then submit at the bottom</p>
+      <div className="text-sm mb-6 space-y-2" style={{ color: "var(--text3)" }}>
+        <p>Check what you finished, then submit at the bottom.</p>
+        <p>We don’t expect everything on this list to get done, or even close. It just helps us plan our cleaning for the rest of the week.</p>
+      </div>
       <div className="space-y-6">
         {sections.map((section) => (
           <section key={section.id}>

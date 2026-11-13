@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Pencil, Trash2, Plus, ChevronDown, ChevronRight, Check, CheckCircle2, Circle, Search, Star, UserCheck } from "lucide-react";
+import { EyeOff, Pencil, Trash2, Plus, ChevronDown, ChevronRight, Check, CheckCircle2, Circle, Search, Star, UserCheck } from "lucide-react";
 import TaskFormFields, { formatFrequency, parseTaskForm } from "@/components/TaskFormFields";
 import CompleteAsMenu from "@/components/CompleteAsMenu";
 import RoomDirtGauge from "@/components/RoomDirtGauge";
@@ -125,6 +125,11 @@ function CatalogTaskRow({
           )}
           {displayTaskName(task)}
         </div>
+        {task.hideFromCleaner && (
+          <span className="inline-flex mt-0.5" title="Hidden from the cleaner" aria-label="Hidden from the cleaner">
+            <EyeOff size={12} style={{ color: "var(--text3)" }} />
+          </span>
+        )}
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <DiffBadge n={displayTaskDifficulty(task)} />
           <span className="text-xs" style={{ color: "var(--text3)" }}>{freqLabel(task.frequencyDays)}</span>
@@ -527,7 +532,9 @@ export default function RoomsPage() {
                 <span className="text-xl w-7 shrink-0 text-center">{room.icon}</span>
                 <span className="font-medium min-w-0 flex-1 md:flex-none md:max-w-[12rem] truncate">{room.name}</span>
                 {room.hideFromCleaner && (
-                  <span className="text-xs shrink-0" style={{ color: "var(--text3)" }}>Hidden from cleaner</span>
+                  <span className="shrink-0 inline-flex" title="Hidden from the cleaner" aria-label="Hidden from the cleaner">
+                    <EyeOff size={14} style={{ color: "var(--text3)" }} />
+                  </span>
                 )}
                 <span className="hidden md:flex flex-1 min-w-10">
                   <RoomDirtGauge tasks={room.tasks} asOf={dirtAsOf} />
