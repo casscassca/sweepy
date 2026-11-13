@@ -23,6 +23,7 @@ type User = {
   color: string;
   webhookSecret: string;
   hasPassword: boolean;
+  cleaner?: boolean;
   vacationOn?: boolean;
   vacationStart?: string;
   vacationEnd?: string;
@@ -494,7 +495,9 @@ export default function UsersPage() {
                     {(houseAway || vacationActive(user, today)) && (
                       <span className="text-xs font-normal px-1.5 py-px rounded-full" style={{ background: "var(--accent)22", color: "var(--accent)" }}>away</span>
                     )}
-                    {!user.hasPassword && (
+                    {user.cleaner ? (
+                      <span className="text-xs font-normal px-1.5 py-px rounded-full" style={{ background: "var(--accent)22", color: "var(--accent)" }}>cleaner</span>
+                    ) : !user.hasPassword && (
                       <span className="text-xs font-normal px-1.5 py-px rounded-full" style={{ background: "var(--red)22", color: "var(--red)" }}>no password</span>
                     )}
                   </p>

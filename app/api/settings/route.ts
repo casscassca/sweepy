@@ -4,6 +4,8 @@ import { scheduleHaMqttSync } from "@/lib/ha-mqtt";
 import { prepareAssignments, reshuffleFrom } from "@/lib/scheduler";
 import { houseVacationActive, houseVacationExpired, ymd } from "@/lib/vacation";
 import { calendarDayStr } from "@/lib/dates";
+import { cleanerCode } from "@/lib/cleaner";
+import { ensureCleaner } from "@/lib/cleaner-db";
 
 function withDirtAsOf<T extends {
   houseVacation: boolean;
@@ -42,6 +44,15 @@ export async function PATCH(req: Request) {
   if (body.houseVacationStart !== undefined) data.houseVacationStart = ymd(body.houseVacationStart);
   if (body.houseVacationEnd !== undefined) data.houseVacationEnd = ymd(body.houseVacationEnd);
   if (typeof body.pauseDirtiness === "boolean") data.pauseDirtiness = body.pauseDirtiness;
+  if (typeof body.cleanerCode === "string") {
+    const code = body.cleanerCode.trim();
+    if (code === "") data.cleanerCode = "";
+    else {
+      const next = cleanerCode(code);
+      if (!next) return NextResponse.json({ error: "Use a 4-digit code" }, { status: 400 });
+      data.cleanerCode = next;
+    }
+  }
 
   const vacationTouched =
     typeof body.houseVacation === "boolean"
@@ -54,6 +65,7 @@ export async function PATCH(req: Request) {
     create: { id: "singleton", ...data },
     update: data,
   });
+  if (settings.cleanerCode) await ensureCleaner();
   if (vacationTouched) await reshuffleFrom(calendarDayStr(), 21, { keepHeld: true });
   else await prepareAssignments(calendarDayStr());
   scheduleHaMqttSync();

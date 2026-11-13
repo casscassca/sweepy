@@ -4,12 +4,14 @@ import { format, isToday, isYesterday, parseISO } from "date-fns";
 import Link from "next/link";
 import { ArrowLeft, RotateCcw } from "lucide-react";
 import { getJson, invalidateLists } from "@/lib/api-cache";
+import { cleanerCompletionName } from "@/lib/cleaner";
 
 type Person = { id: string; name: string; color: string };
 type Entry = {
   id: string;
   completedAt: string;
-  task: { name: string; oneOff: boolean; difficulty: number; room: { name: string } | null };
+  layer?: string;
+  task: { name: string; oneOff: boolean; difficulty: number; addonName?: string | null; addon2Name?: string | null; room: { name: string } | null };
   user: Person;
   completedBy: Person | null;
 };
@@ -160,7 +162,7 @@ export default function HistoryPage() {
                       {format(new Date(entry.completedAt), "h:mm a")}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">{entry.task.name}</p>
+                      <p className="text-sm truncate">{cleanerCompletionName(entry.task, entry.layer ?? "")}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text3)" }}>
                           {entry.completedBy ? (

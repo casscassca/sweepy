@@ -21,7 +21,7 @@ import type { TaskFormRoom, TaskFormTask } from "@/components/TaskFormFields";
 import { useHideDone } from "@/lib/hide-done";
 import { invalidateLists, loadJson } from "@/lib/api-cache";
 
-type User = { id: string; name: string; color: string };
+type User = { id: string; name: string; color: string; cleaner?: boolean };
 type Task = TaskFormTask & { room: { id: string; name: string } | null; oneOff?: boolean; roomId?: string | null };
 type Assignment = { id: string; userId: string; date: string; order: number; completedAt: string | null; pinned?: boolean; task: Task; user: User };
 
@@ -172,7 +172,7 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
       {showAssign && onReassign && (
         <PersonMenu
           title="Give to"
-          users={users}
+          users={users.filter((u) => !u.cleaner)}
           selectedId={assignment.userId}
           defaultDate={assignment.date}
           onPick={(id, date) => onReassign(assignment.id, id, date)}
@@ -497,7 +497,7 @@ export default function UpcomingPage() {
         <AddToDaySheet
           date={addingDate}
           title={`Add to ${dayLabel(addingDate)}`}
-          users={users}
+          users={users.filter((u) => !u.cleaner)}
           defaultUserId={me?.id}
           onClose={() => setAddingDate(null)}
           onAdded={() => { invalidateLists(); load(); }}

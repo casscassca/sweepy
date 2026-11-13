@@ -37,6 +37,7 @@ model Task {
   addon2FrequencyDays Int       @default(0)
   addon2Points        Int       @default(1)
   addon2LastDoneAt    DateTime?
+  hideFromCleaner Boolean @default(false)
   createdAt     DateTime @default(now())
   assignableUsers TaskAssignableUser[]
   assignments     DailyAssignment[]
@@ -69,6 +70,8 @@ model User {
   createdAt      DateTime @default(now())
   // Auth: scrypt password hash (null = no password set, cannot log in yet).
   passwordHash   String?
+  // The person a cleaner’s check-offs are credited to. Never auto-scheduled.
+  cleaner        Boolean  @default(false)
   // Per-user secret for the Home Assistant webhook — both authorizes the call
   // and identifies who acted (so completions credit the right person).
   webhookSecret  String   @default("")
@@ -113,6 +116,8 @@ model CompletionLog {
   userId        String
   completedById String?
   completedAt   DateTime @default(now())
+  // "" or "base" is the chore. "addon" / "addon2" record just that extra line.
+  layer         String   @default("")
   task          Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   completedBy   User?    @relation("CompletedFor", fields: [completedById], references: [id], onDelete: Cascade)
@@ -135,6 +140,14 @@ model Settings {
   pauseDirtiness     Boolean @default(false)
   dirtFrozenOn       String  @default("")
   backupAt           DateTime?
+  cleanerCode        String   @default("")
+}
+
+model CleanerNote {
+  id          String    @id @default(cuid())
+  body        String
+  createdAt   DateTime  @default(now())
+  dismissedAt DateTime?
 }
 
 model IntegrationLog {

@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { laterInstant } from "./dates";
+import { previousLayerStamp, type CleanerLayer } from "./cleaner";
 import { isAddon2Due, isAddonDue } from "./addon";
 import { publishHaMqttTaskEvent, scheduleHaMqttSync } from "./ha-mqtt";
 import {
@@ -101,7 +102,7 @@ export async function completeTask(opts: {
 
 export async function uncompleteTask(taskId: string) {
   const latest = await prisma.completionLog.findFirst({
-    where: { taskId },
+    where: { taskId, layer: { notIn: ["addon", "addon2"] } },
     orderBy: [{ completedAt: "desc" }, { id: "desc" }],
   });
   if (!latest) return { ok: true as const };
@@ -116,14 +117,23 @@ export async function uncompleteFromLog(logId: string) {
     where: { taskId: log.taskId },
     orderBy: [{ completedAt: "desc" }, { id: "desc" }],
   });
-  const isLatest = logs[0]?.id === log.id;
+  const layer = (log.layer === "addon" || log.layer === "addon2" ? log.layer : "base") as CleanerLayer;
   const task = await prisma.task.findUnique({ where: { id: log.taskId } });
-  const mopped = task?.addonLastDoneAt
+  const mopped = layer === "base" && task?.addonLastDoneAt
     && Math.abs(task.addonLastDoneAt.getTime() - log.completedAt.getTime()) < 5000;
-  const stacked = task?.addon2LastDoneAt
+  const stacked = layer === "base" && task?.addon2LastDoneAt
     && Math.abs(task.addon2LastDoneAt.getTime() - log.completedAt.getTime()) < 5000;
   const older = logs.filter((row) => row.id !== log.id);
-  const previous = older[0] ?? null;
+  const previous = older.find((row) => row.layer !== "addon" && row.layer !== "addon2") ?? null;
+  const layerStamp = previousLayerStamp(
+    logs.map((row) => ({ id: row.id, completedAt: row.completedAt, layer: row.layer })),
+    log.id,
+    layer,
+  );
+  const newestOfLayer = logs.find((row) => layer === "base"
+    ? row.layer !== "addon" && row.layer !== "addon2"
+    : row.layer === layer);
+  const isLatest = newestOfLayer?.id === log.id;
   const previousFilter = task && isFilterAddonTask(task)
     ? previousFilterLastDone(
       [...older].reverse().map((row) => row.completedAt),
@@ -133,7 +143,17 @@ export async function uncompleteFromLog(logId: string) {
 
   await prisma.completionLog.delete({ where: { id: log.id } });
 
-  if (isLatest) {
+  if (isLatest && layer === "addon") {
+    await prisma.task.update({
+      where: { id: log.taskId },
+      data: { addonLastDoneAt: layerStamp },
+    });
+  } else if (isLatest && layer === "addon2") {
+    await prisma.task.update({
+      where: { id: log.taskId },
+      data: { addon2LastDoneAt: layerStamp },
+    });
+  } else if (isLatest) {
     await prisma.task.update({
       where: { id: log.taskId },
       data: {
@@ -156,7 +176,7 @@ export async function uncompleteFromLog(logId: string) {
     const doneAt = log.completedAt.getTime();
     assignment = done.find((a) => a.completedAt && Math.abs(a.completedAt.getTime() - doneAt) < 5000) ?? null;
   }
-  if (assignment && isLatest) {
+  if (assignment && isLatest && layer === "base") {
     await prisma.dailyAssignment.update({
       where: { id: assignment.id },
       data: { completedAt: null, completedById: null },
