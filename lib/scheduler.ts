@@ -20,6 +20,7 @@ import { dirtAsOfForTask, nextPresentDay, personAway, returnDay } from "./vacati
 import { applyDirtPause, expireHouseVacation, loadVacationContext } from "./vacation-db";
 import { isAllowedOnDate, nextAllowedOnOrAfter } from "./allowed-days";
 import { scheduleHaMqttSync } from "./ha-mqtt";
+import { pickAddAssignee } from "./add-to-day";
 import { addDays, format, parseISO } from "date-fns";
 
 function todayStr() {
@@ -615,7 +616,24 @@ export async function holdAssignmentOnDate(id: string, date: string, opts?: { re
   return assignment;
 }
 
-export async function addTaskToDate(taskId: string, date: string, preferredUserId?: string) {
+async function giveAssignmentTo(id: string, date: string, userId: string) {
+  const last = await prisma.dailyAssignment.findFirst({
+    where: { date, userId, NOT: { id } },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+  return prisma.dailyAssignment.update({
+    where: { id },
+    data: { userId, order: (last?.order ?? -1) + 1 },
+  });
+}
+
+export async function addTaskToDate(
+  taskId: string,
+  date: string,
+  preferredUserId?: string,
+  opts?: { reassign?: boolean },
+) {
   const task = await prisma.task.findUnique({
     where: { id: taskId },
     include: { assignableUsers: true },
@@ -624,24 +642,46 @@ export async function addTaskToDate(taskId: string, date: string, preferredUserI
   if (task.oneOff) return { ok: false as const, status: 400, reason: "one-off" };
   const landing = nextAllowedOnOrAfter(task.allowedDays, date) ?? date;
 
+  const people = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true } });
+  const allowed = task.assignableUsers.length > 0
+    ? task.assignableUsers.map((a) => a.userId)
+    : people.map((u) => u.id);
+
   const open = await prisma.dailyAssignment.findFirst({
     where: { taskId, completedAt: null },
   });
   if (open) {
     const moved = await holdAssignmentOnDate(open.id, landing);
-    return { ok: true as const, already: open.date === landing, assignment: moved };
+    if (!moved) return { ok: false as const, status: 404 as const, reason: "not found" };
+    const userId = pickAddAssignee({
+      preferredUserId,
+      allowedIds: allowed,
+      currentUserId: moved.userId,
+      reassign: opts?.reassign,
+    });
+    const assignment = userId && userId !== moved.userId
+      ? await giveAssignmentTo(moved.id, landing, userId)
+      : moved;
+    return { ok: true as const, already: open.date === landing, assignment };
   }
 
   const existingToday = await prisma.dailyAssignment.findUnique({
     where: { date_taskId: { date: landing, taskId } },
   });
-  if (existingToday) return { ok: true as const, already: true, assignment: existingToday };
+  if (existingToday) {
+    const userId = pickAddAssignee({
+      preferredUserId,
+      allowedIds: allowed,
+      currentUserId: existingToday.userId,
+      reassign: opts?.reassign,
+    });
+    const assignment = userId && userId !== existingToday.userId
+      ? await giveAssignmentTo(existingToday.id, landing, userId)
+      : existingToday;
+    return { ok: true as const, already: true, assignment };
+  }
 
-  const people = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, select: { id: true } });
-  const allowed = task.assignableUsers.length > 0
-    ? task.assignableUsers.map((a) => a.userId)
-    : people.map((u) => u.id);
-  const userId = preferredUserId && allowed.includes(preferredUserId) ? preferredUserId : allowed[0];
+  const userId = pickAddAssignee({ preferredUserId, allowedIds: allowed });
   if (!userId) return { ok: false as const, status: 422, reason: "no people to assign to" };
 
   const last = await prisma.dailyAssignment.findFirst({

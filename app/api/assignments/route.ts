@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { scheduleHaMqttSync } from "@/lib/ha-mqtt";
+import { catalogAddAssignee } from "@/lib/add-to-day";
 import { addTaskToDate, createOneOff } from "@/lib/scheduler";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { format } from "date-fns";
@@ -69,10 +70,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, reason: "taskId required" }, { status: 400 });
   }
   const cookieStore = await cookies();
-  const userId = await verifySessionToken(cookieStore.get(COOKIE_NAME)?.value);
+  const sessionUserId = await verifySessionToken(cookieStore.get(COOKIE_NAME)?.value);
+  const { userId, reassign } = catalogAddAssignee(body.userId, sessionUserId);
   const results = [];
   for (const taskId of taskIds) {
-    const result = await addTaskToDate(taskId, day, userId ?? undefined);
+    const result = await addTaskToDate(taskId, day, userId, { reassign });
     if (!result.ok) return NextResponse.json(result, { status: result.status });
     results.push(result);
   }
