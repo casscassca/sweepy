@@ -165,7 +165,6 @@ function TaskCard({ assignment, users, meId, onComplete, onUncomplete, onRemove,
         <CompleteAsMenu
           users={users}
           task={assignment.task}
-          meId={meId}
           defaultDate={assignment.date}
           onPick={(userId, date, layers) => { onComplete?.(assignment.id, userId, date, layers); setShowWho(false); }}
           onClose={() => setShowWho(false)}

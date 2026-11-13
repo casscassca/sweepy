@@ -179,7 +179,6 @@ function CatalogTaskRow({
         <CompleteAsMenu
           users={users}
           task={task}
-          meId={meId}
           onPick={(userId, date, layers) => { onComplete(userId, date, layers); setShowWho(false); }}
           onClose={() => setShowWho(false)}
         />

@@ -11,14 +11,12 @@ export default function CompleteAsMenu({
   users,
   defaultDate,
   task,
-  meId,
   onPick,
   onClose,
 }: {
   users: Person[];
   defaultDate?: string;
   task?: AddonFields;
-  meId?: string;
   onPick: (userId: string | null, date: string, layers?: PartLayer[]) => void;
   onClose: () => void;
 }) {
@@ -27,6 +25,8 @@ export default function CompleteAsMenu({
   const anchorRef = useRef<HTMLSpanElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const parts = task ? dueAddonParts(task, new Date(`${date}T12:00:00`)) : [];
+  const onePart = parts.length > 1;
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current;
@@ -52,10 +52,7 @@ export default function CompleteAsMenu({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [users.length, date, task, meId]);
-
-  const parts = task && meId ? dueAddonParts(task, new Date(`${date}T12:00:00`)) : [];
-  const onePart = parts.length > 1;
+  }, [users.length, date, task, onePart, parts.length]);
 
   const menu = (
     <>
@@ -117,14 +114,29 @@ export default function CompleteAsMenu({
           <div className="mt-1 pt-1" style={{ borderTop: "1px solid var(--border)" }}>
             <p className="text-xs px-2 py-1" style={{ color: "var(--text3)" }}>Just one part</p>
             {parts.map((part) => (
-              <button
-                key={part.layer}
-                type="button"
-                onClick={() => onPick(meId ?? null, date, [part.layer])}
-                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-black/5"
-              >
-                Just {part.name}
-              </button>
+              <div key={part.layer} className="mb-1">
+                <p className="text-xs px-2 pt-1" style={{ color: "var(--text2)" }}>Just {part.name}</p>
+                {users.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => onPick(u.id, date, [part.layer])}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-black/5"
+                  >
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: u.color }} />
+                    {u.name}
+                  </button>
+                ))}
+                {users.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => onPick(null, date, [part.layer])}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-black/5"
+                  >
+                    Both
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}
