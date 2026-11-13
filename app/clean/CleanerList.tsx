@@ -138,7 +138,7 @@ export default function CleanerList() {
       <h1 className="text-2xl font-semibold tracking-tight mb-1">Cleaning</h1>
       <div className="text-sm mb-6 space-y-2" style={{ color: "var(--text3)" }}>
         <p>Check what you finished, then submit at the bottom.</p>
-        <p>We don’t expect everything on this list to get done, or even close. It just helps us plan our cleaning for the rest of the week.</p>
+        <p>We never expect this list to get finished — we just use this to help plan our cleaning for the rest of the week!</p>
       </div>
       <div className="space-y-6">
         {sections.map((section) => (
