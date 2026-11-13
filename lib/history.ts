@@ -1,7 +1,7 @@
 export type HistoryStamp = { at: Date; id: string };
 
 /** Newest first, one page, from completions and cleaner notes fetched the same way. */
-export function mergeHistoryPage<T extends HistoryStamp>(completions: T[], notes: T[], pageSize: number) {
+export function mergeHistoryPage<C extends HistoryStamp, N extends HistoryStamp>(completions: C[], notes: N[], pageSize: number) {
   const merged = [...completions, ...notes].sort((a, b) => {
     const byTime = b.at.getTime() - a.at.getTime();
     if (byTime !== 0) return byTime;
