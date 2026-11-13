@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { format, addDays, parseISO } from "date-fns";
+import { clearOpenCleanerAssignments } from "@/lib/cleaner-db";
 
 function daysFrom(from: string | null, count = 21): string[] {
   const start = from && /^\d{4}-\d{2}-\d{2}$/.test(from)
@@ -15,6 +16,7 @@ export async function GET(req: Request) {
   const days = daysFrom(searchParams.get("from"));
 
   try {
+    await clearOpenCleanerAssignments();
     const assignments = await prisma.dailyAssignment.findMany({
       where: { date: { in: days }, parked: false },
       include: {

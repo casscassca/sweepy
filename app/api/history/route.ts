@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { uncompleteFromLog } from "@/lib/complete";
+import { COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { accountOwnerId } from "@/lib/cleaner-db";
+import { mergeHistoryPage } from "@/lib/history";
 
 const PAGE = 60;
 
@@ -24,12 +28,33 @@ export async function GET(req: Request) {
     take: PAGE + 1,
   });
 
-  const hasMore = entries.length > PAGE;
-  const page = hasMore ? entries.slice(0, PAGE) : entries;
-  const nextBefore = hasMore ? page[page.length - 1]?.completedAt.toISOString() ?? null : null;
+  const jar = await cookies();
+  const viewerId = await verifySessionToken(jar.get(COOKIE_NAME)?.value);
+  const ownerId = viewerId ? await accountOwnerId() : null;
+  let notes: { id: string; body: string; createdAt: Date }[] = [];
+  if (viewerId && viewerId === ownerId) {
+    const cleaner = await prisma.user.findFirst({ where: { cleaner: true }, select: { id: true } });
+    const forThisPerson = !userId || userId === cleaner?.id;
+    if (forThisPerson) {
+      notes = await prisma.cleanerNote.findMany({
+        where: beforeDate ? { createdAt: { lt: beforeDate } } : {},
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: PAGE + 1,
+      });
+    }
+  }
+
+  const merged = mergeHistoryPage(
+    entries.map((entry) => ({ kind: "completion" as const, at: entry.completedAt, id: entry.id, entry })),
+    notes.map((note) => ({ kind: "note" as const, at: note.createdAt, id: note.id, body: note.body })),
+    PAGE,
+  );
+  const nextBefore = merged.hasMore ? merged.page[merged.page.length - 1]?.at.toISOString() ?? null : null;
 
   return NextResponse.json({
-    entries: page,
+    entries: merged.page.map((row) => row.kind === "note"
+      ? { kind: "note" as const, id: row.id, completedAt: row.at.toISOString(), body: row.body }
+      : { kind: "completion" as const, ...row.entry }),
     nextBefore,
   });
 }

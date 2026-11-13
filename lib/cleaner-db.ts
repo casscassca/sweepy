@@ -12,6 +12,25 @@ import { cookies } from "next/headers";
 export const CLEANER_COOKIE = "sweepy_cleaner";
 export { SESSION_TTL_SECONDS };
 
+/** The first household account. The Cleaner person the app creates is not an owner. */
+export async function accountOwnerId() {
+  const owner = await prisma.user.findFirst({
+    where: { cleaner: false },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  return owner?.id ?? null;
+}
+
+/** The Cleaner person never keeps an unfinished chore on a day. */
+export async function clearOpenCleanerAssignments() {
+  const removed = await prisma.dailyAssignment.deleteMany({
+    where: { completedAt: null, user: { cleaner: true } },
+  });
+  if (removed.count > 0) scheduleHaMqttSync();
+  return removed.count;
+}
+
 export async function ensureCleaner() {
   const existing = await prisma.user.findFirst({ where: { cleaner: true }, orderBy: { createdAt: "asc" } });
   if (existing) return existing;

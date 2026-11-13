@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { scheduleHaMqttSync } from "@/lib/ha-mqtt";
 import { catalogAddAssignee } from "@/lib/add-to-day";
+import { clearOpenCleanerAssignments } from "@/lib/cleaner-db";
 import { addTaskToDate, createOneOff } from "@/lib/scheduler";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { format } from "date-fns";
@@ -10,6 +11,7 @@ import { format } from "date-fns";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date") ?? format(new Date(), "yyyy-MM-dd");
+  await clearOpenCleanerAssignments();
 
   const assignments = await prisma.dailyAssignment.findMany({
     where: { date, parked: false },

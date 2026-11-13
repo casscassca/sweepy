@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySessionToken } from "@/lib/auth";
-import { hasCleanerAccess } from "@/lib/cleaner-db";
+import { accountOwnerId, hasCleanerAccess } from "@/lib/cleaner-db";
 import { prisma } from "@/lib/prisma";
+
+async function isOwner(userId: string) {
+  return (await accountOwnerId()) === userId;
+}
 
 export async function GET() {
   const jar = await cookies();
   const userId = await verifySessionToken(jar.get(COOKIE_NAME)?.value);
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!await isOwner(userId)) return NextResponse.json([]);
   const notes = await prisma.cleanerNote.findMany({
     where: { dismissedAt: null },
     orderBy: { createdAt: "desc" },
@@ -30,6 +35,7 @@ export async function DELETE(req: Request) {
   const jar = await cookies();
   const userId = await verifySessionToken(jar.get(COOKIE_NAME)?.value);
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!await isOwner(userId)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   if (typeof body.id !== "string" || !body.id) {
     return NextResponse.json({ ok: false, reason: "id required" }, { status: 400 });

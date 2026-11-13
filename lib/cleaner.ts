@@ -1,6 +1,5 @@
 import { timingSafeEqual } from "crypto";
 import { hasAddon, hasAddon2, isAddon2Due, isAddonDue, type AddonFields } from "./addon";
-import { calendarDayStr } from "./dates";
 
 export type CleanerLayer = "base" | "addon" | "addon2";
 
@@ -38,11 +37,6 @@ type CleanerRoom = {
   tasks: AddonFields & { id: string; hideFromCleaner?: boolean; oneOff?: boolean }[];
 };
 
-function doneOn(at: Date | string | null | undefined, today: string) {
-  if (!at) return false;
-  return calendarDayStr(at) === today;
-}
-
 /** First letter only, so "mop floors" becomes "Mop floors". */
 export function capitalizeFirst(name: string) {
   const trimmed = name.trim();
@@ -52,20 +46,18 @@ export function capitalizeFirst(name: string) {
 
 export function linesForCleaner(
   task: AddonFields & { id: string; hideFromCleaner?: boolean; oneOff?: boolean },
-  today: string,
+  _today: string,
 ): CleanerLine[] {
   if (task.oneOff || task.hideFromCleaner) return [];
-  const lines: CleanerLine[] = [];
-  // Already done today stays off the list. The cleaner does not see household check-offs.
-  if (!doneOn(task.lastDoneAt, today)) {
-    lines.push({
+  const lines: CleanerLine[] = [
+    {
       taskId: task.id,
       layer: "base",
       name: capitalizeFirst(task.name ?? ""),
       done: false,
-    });
-  }
-  if (hasAddon(task) && !doneOn(task.addonLastDoneAt, today)) {
+    },
+  ];
+  if (hasAddon(task)) {
     lines.push({
       taskId: task.id,
       layer: "addon",
@@ -73,7 +65,7 @@ export function linesForCleaner(
       done: false,
     });
   }
-  if (hasAddon2(task) && !doneOn(task.addon2LastDoneAt, today)) {
+  if (hasAddon2(task)) {
     lines.push({
       taskId: task.id,
       layer: "addon2",
@@ -117,6 +109,31 @@ export function cleanerCompletionName(
   if (layer === "addon") return (task.addonName ?? "").trim() || task.name || "";
   if (layer === "addon2") return (task.addon2Name ?? "").trim() || task.name || "";
   return task.name ?? "";
+}
+
+/** Undoing the Cleaner's check-off should not leave them an open chore. */
+export function reopenAssignmentAfterUndo(assigneeIsCleaner: boolean) {
+  return !assigneeIsCleaner;
+}
+
+export type CleanerSubmitLine = { taskId: string; layer: CleanerLayer };
+
+/** The lines a cleaner chose, with blanks and repeats dropped. */
+export function cleanerSubmitLines(raw: unknown): CleanerSubmitLine[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const lines: CleanerSubmitLine[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as { taskId?: unknown; layer?: unknown };
+    const layer = row.layer === "base" || row.layer === "addon" || row.layer === "addon2" ? row.layer : null;
+    if (typeof row.taskId !== "string" || !row.taskId.trim() || !layer) continue;
+    const key = `${row.taskId}:${layer}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push({ taskId: row.taskId, layer });
+  }
+  return lines.slice(0, 300);
 }
 
 type StampLog = { id: string; completedAt: Date; layer: string };

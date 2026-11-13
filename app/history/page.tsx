@@ -7,7 +7,8 @@ import { getJson, invalidateLists } from "@/lib/api-cache";
 import { cleanerCompletionName } from "@/lib/cleaner";
 
 type Person = { id: string; name: string; color: string };
-type Entry = {
+type CompletionEntry = {
+  kind?: "completion";
   id: string;
   completedAt: string;
   layer?: string;
@@ -15,6 +16,12 @@ type Entry = {
   user: Person;
   completedBy: Person | null;
 };
+type NoteEntry = { kind: "note"; id: string; completedAt: string; body: string };
+type Entry = CompletionEntry | NoteEntry;
+
+function isNote(entry: Entry): entry is NoteEntry {
+  return entry.kind === "note";
+}
 
 const DIFF_COLOR = ["", "#a78bfa", "#fb923c", "#f87171"];
 const DIFF_LABEL = ["", "quick", "medium", "big job"];
@@ -148,68 +155,77 @@ export default function HistoryPage() {
               <h2 className="font-semibold text-sm mb-2" style={{ color: "var(--text)" }}>
                 {dayHeading(day)}
                 <span className="font-normal ml-2" style={{ color: "var(--text3)" }}>
-                  {items.length} · {items.reduce((s, e) => s + e.task.difficulty, 0)} pts
+                  {items.length} · {items.reduce((s, e) => s + (isNote(e) ? 0 : e.task.difficulty), 0)} pts
                 </span>
               </h2>
               <ol className="space-y-1.5">
                 {items.map((entry) => (
                   <li
                     key={entry.id}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl group"
+                    className="flex items-start gap-3 px-3 py-2.5 rounded-xl group"
                     style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}
                   >
                     <span className="text-xs tabular-nums w-16 shrink-0" style={{ color: "var(--text3)" }}>
                       {format(new Date(entry.completedAt), "h:mm a")}
                     </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">{cleanerCompletionName(entry.task, entry.layer ?? "")}</p>
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text3)" }}>
-                          {entry.completedBy ? (
-                            <>
-                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: entry.completedBy.color }} />
-                              {entry.completedBy.name}
-                            </>
-                          ) : (
-                            <>
-                              <span className="flex items-center shrink-0">
-                                {users.slice(0, 2).map((u, i) => (
-                                  <span
-                                    key={u.id}
-                                    className="w-1.5 h-1.5 rounded-full"
-                                    style={{ background: u.color, marginLeft: i === 0 ? 0 : -2 }}
-                                  />
-                                ))}
-                              </span>
-                              Both
-                            </>
-                          )}
-                        </span>
-                        <span className="text-xs" style={{ color: "var(--text3)" }}>
-                          {entry.task.oneOff ? "one-off" : entry.task.room?.name}
-                        </span>
-                        <span
-                          className="text-xs font-medium px-1.5 py-px rounded-full"
-                          style={{
-                            background: DIFF_COLOR[entry.task.difficulty] + "22",
-                            color: DIFF_COLOR[entry.task.difficulty],
-                          }}
-                        >
-                          {DIFF_LABEL[entry.task.difficulty]}
-                        </span>
+                    {isNote(entry) ? (
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm whitespace-pre-wrap break-words">{entry.body}</p>
+                        <p className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>Cleaner note</p>
                       </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => undo(entry.id)}
-                      disabled={undoingId === entry.id}
-                      className="p-2 rounded-lg shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-                      style={{ color: "var(--text3)" }}
-                      title="Undo this completion"
-                      aria-label={`Undo ${entry.task.name}`}
-                    >
-                      <RotateCcw size={16} />
-                    </button>
+                    ) : (
+                      <>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm truncate">{cleanerCompletionName(entry.task, entry.layer ?? "")}</p>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text3)" }}>
+                              {entry.completedBy ? (
+                                <>
+                                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: entry.completedBy.color }} />
+                                  {entry.completedBy.name}
+                                </>
+                              ) : (
+                                <>
+                                  <span className="flex items-center shrink-0">
+                                    {users.slice(0, 2).map((u, i) => (
+                                      <span
+                                        key={u.id}
+                                        className="w-1.5 h-1.5 rounded-full"
+                                        style={{ background: u.color, marginLeft: i === 0 ? 0 : -2 }}
+                                      />
+                                    ))}
+                                  </span>
+                                  Both
+                                </>
+                              )}
+                            </span>
+                            <span className="text-xs" style={{ color: "var(--text3)" }}>
+                              {entry.task.oneOff ? "one-off" : entry.task.room?.name}
+                            </span>
+                            <span
+                              className="text-xs font-medium px-1.5 py-px rounded-full"
+                              style={{
+                                background: DIFF_COLOR[entry.task.difficulty] + "22",
+                                color: DIFF_COLOR[entry.task.difficulty],
+                              }}
+                            >
+                              {DIFF_LABEL[entry.task.difficulty]}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => undo(entry.id)}
+                          disabled={undoingId === entry.id}
+                          className="p-2 rounded-lg shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                          style={{ color: "var(--text3)" }}
+                          title="Undo this completion"
+                          aria-label={`Undo ${entry.task.name}`}
+                        >
+                          <RotateCcw size={16} />
+                        </button>
+                      </>
+                    )}
                   </li>
                 ))}
               </ol>

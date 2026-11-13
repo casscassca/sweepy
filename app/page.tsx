@@ -142,10 +142,10 @@ export default function TodayPage() {
   const [cleanerNotes, setCleanerNotes] = useState<CleanerNote[]>([]);
   const today = format(new Date(), "yyyy-MM-dd");
   const household = users.filter((u) => !u.cleaner);
-  const columns = users.filter((u) => !u.cleaner || assignments.some((a) => a.userId === u.id));
+  const columns = users.filter((u) => !u.cleaner || assignments.some((a) => a.userId === u.id && a.completedAt));
 
   const grouped = columns.map((u) => {
-    const all = assignments.filter((a) => a.userId === u.id).sort((a, b) => {
+    const all = assignments.filter((a) => a.userId === u.id && !(u.cleaner && !a.completedAt)).sort((a, b) => {
       const aImp = !a.completedAt && a.task.important ? 1 : 0;
       const bImp = !b.completedAt && b.task.important ? 1 : 0;
       if (aImp !== bImp) return bImp - aImp;
@@ -213,7 +213,10 @@ export default function TodayPage() {
   }
 
   async function uncomplete(assignmentId: string) {
-    setAssignments((prev) => prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: null } : a)));
+    const row = assignments.find((a) => a.id === assignmentId);
+    setAssignments((prev) => row?.user.cleaner
+      ? prev.filter((a) => a.id !== assignmentId)
+      : prev.map((a) => (a.id === assignmentId ? { ...a, completedAt: null } : a)));
     const res = await fetch("/api/complete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId }) });
     invalidateLists();
     if (!res.ok) load();
