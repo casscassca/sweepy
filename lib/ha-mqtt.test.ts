@@ -144,6 +144,35 @@ describe("ha mqtt payloads", () => {
     assert.equal(inventory.rooms.includes("unassigned"), false);
   });
 
+  it("does not mark the parent due when only its add-ons are due", () => {
+    const waiting = {
+      ...feeder,
+      name: "Reset wet food",
+      frequencyDays: 3,
+      lastDoneAt: new Date("2026-11-11T12:00:00-06:00"),
+      dueOnly: true,
+      addonName: "clean setup",
+      addonFrequencyDays: 6,
+      addonLastDoneAt: new Date("2026-11-07T12:00:00-06:00"),
+      addon2Name: "replace food/water filters",
+      addon2FrequencyDays: 30,
+      addon2LastDoneAt: new Date("2026-10-14T12:00:00-06:00"),
+    };
+    const friday = new Date("2026-11-13T12:00:00-06:00");
+    const fridayState = taskState(waiting, undefined, friday, "2026-11-13");
+    assert.equal(fridayState.due_today, false);
+    assert.equal(fridayState.overdue, false);
+    assert.equal(fridayState.addon_due, true);
+    assert.equal(fridayState.addon2_due, true);
+    assert.equal(fridayState.due_date, "2026-11-14");
+    assert.equal(fridayState.display_name, "Reset wet food, clean setup, and replace food/water filters");
+
+    const saturday = taskState(waiting, undefined, new Date("2026-11-14T12:00:00-06:00"), "2026-11-14");
+    assert.equal(saturday.due_today, true);
+    assert.equal(saturday.overdue, false);
+    assert.equal(saturday.display_name, "Reset wet food, clean setup, and replace food/water filters");
+  });
+
   it("publishes add-on dirt and last-done as their own sensors", () => {
     const stacked = {
       ...feeder,
