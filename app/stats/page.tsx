@@ -13,7 +13,7 @@ export default function StatsPage() {
   const [stats, setStats] = useState<UserStats[]>([]);
 
   useEffect(() => {
-    void loadJson<UserStats[]>("/api/stats", [], (data) => setStats(Array.isArray(data) ? data : []));
+    void loadJson<{ people?: UserStats[] }>("/api/stats", {}, (data) => setStats(Array.isArray(data.people) ? data.people : []));
   }, []);
 
   const maxYearly = Math.max(...stats.map((s) => s.yearly), 1);
