@@ -125,14 +125,14 @@ function CatalogTaskRow({
           )}
           {displayTaskName(task)}
         </div>
-        {task.hideFromCleaner && (
-          <span className="flex mt-0.5" title="Hidden from the cleaner" aria-label="Hidden from the cleaner">
-            <EyeOff size={12} style={{ color: "var(--text3)" }} />
-          </span>
-        )}
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <DiffBadge n={displayTaskDifficulty(task)} />
           <span className="text-xs" style={{ color: "var(--text3)" }}>{freqLabel(task.frequencyDays)}</span>
+          {task.hideFromCleaner && (
+            <span className="inline-flex" title="Hidden from the cleaner" aria-label="Hidden from the cleaner">
+              <EyeOff size={12} style={{ color: "var(--text3)" }} />
+            </span>
+          )}
           {catchUp && (
             <span className="text-xs" style={{ color: "var(--red)" }}>
               {task.lastDoneAt ? "past due" : "never done"}
