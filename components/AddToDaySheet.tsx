@@ -34,7 +34,7 @@ export default function AddToDaySheet({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
-  const [oneOffUserId, setOneOffUserId] = useState(defaultUserId ?? users[0]?.id ?? "");
+  const [assigneeId, setAssigneeId] = useState(defaultUserId ?? users[0]?.id ?? "");
   const [oneOffDiff, setOneOffDiff] = useState(1);
   const [composingOneOff, setComposingOneOff] = useState(false);
   const [savingOneOff, setSavingOneOff] = useState(false);
@@ -49,10 +49,10 @@ export default function AddToDaySheet({
   }, [date]);
 
   useEffect(() => {
-    if (!oneOffUserId && (defaultUserId || users[0])) {
-      setOneOffUserId(defaultUserId ?? users[0].id);
+    if (!assigneeId && (defaultUserId || users[0])) {
+      setAssigneeId(defaultUserId ?? users[0].id);
     }
-  }, [defaultUserId, users, oneOffUserId]);
+  }, [defaultUserId, users, assigneeId]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -82,7 +82,7 @@ export default function AddToDaySheet({
     const res = await fetch("/api/assignments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId, date }),
+      body: JSON.stringify({ taskId, date, ...(assigneeId ? { userId: assigneeId } : {}) }),
     });
     if (res.ok) {
       setOnDay((prev) => new Set(prev).add(taskId));
@@ -127,7 +127,7 @@ export default function AddToDaySheet({
     const res = await fetch("/api/assignments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskIds, date }),
+      body: JSON.stringify({ taskIds, date, ...(assigneeId ? { userId: assigneeId } : {}) }),
     });
     setAdding(false);
     if (res.ok) {
@@ -137,7 +137,7 @@ export default function AddToDaySheet({
   }
 
   async function addOneOff() {
-    if (!typedName || !oneOffUserId || savingOneOff || !canAddOneOff) return;
+    if (!typedName || !assigneeId || savingOneOff || !canAddOneOff) return;
     setSavingOneOff(true);
     const res = await fetch("/api/assignments", {
       method: "POST",
@@ -145,7 +145,7 @@ export default function AddToDaySheet({
       body: JSON.stringify({
         oneOff: true,
         name: typedName,
-        userId: oneOffUserId,
+        userId: assigneeId,
         difficulty: oneOffDiff,
         date,
       }),
@@ -180,12 +180,12 @@ export default function AddToDaySheet({
                 <button
                   key={u.id}
                   type="button"
-                  onClick={() => setOneOffUserId(u.id)}
+                  onClick={() => setAssigneeId(u.id)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium"
                   style={{
-                    background: oneOffUserId === u.id ? u.color + "22" : "var(--surface2)",
-                    color: oneOffUserId === u.id ? u.color : "var(--text2)",
-                    border: `2px solid ${oneOffUserId === u.id ? u.color : "transparent"}`,
+                    background: assigneeId === u.id ? u.color + "22" : "var(--surface2)",
+                    color: assigneeId === u.id ? u.color : "var(--text2)",
+                    border: `2px solid ${assigneeId === u.id ? u.color : "transparent"}`,
                   }}
                 >
                   <span className="w-2 h-2 rounded-full" style={{ background: u.color }} />
