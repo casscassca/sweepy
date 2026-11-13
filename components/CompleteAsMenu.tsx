@@ -120,7 +120,7 @@ export default function CompleteAsMenu({
               <button
                 key={part.layer}
                 type="button"
-                onClick={() => onPick(meId, date, [part.layer])}
+                onClick={() => onPick(meId ?? null, date, [part.layer])}
                 className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-black/5"
               >
                 Just {part.name}
