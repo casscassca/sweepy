@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import { Pencil, Trash2, Plus, KeyRound, RefreshCw, Check, Copy, Bell, ScrollText, TreePalm } from "lucide-react";
 import { encodeWeek, parseWeek } from "@/lib/capacity";
@@ -29,6 +30,7 @@ type User = {
   vacationEnd?: string;
 };
 type UserStats = { user: User; weekly: number; monthly: number; yearly: number };
+type CleanerSummary = { last: { day: string; points: number } | null; month: number; year: number };
 type HouseVac = {
   houseVacation: boolean;
   houseVacationStart: string;
@@ -185,6 +187,7 @@ function emptyForm(color: string) {
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<UserStats[]>([]);
+  const [cleanerSummary, setCleanerSummary] = useState<CleanerSummary | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState(emptyForm(COLORS[0]));
@@ -202,7 +205,10 @@ export default function UsersPage() {
   async function load() {
     await Promise.all([
       loadJson<User[]>("/api/users", [], (u) => setUsers(Array.isArray(u) ? u : [])),
-      loadJson<UserStats[]>("/api/stats", [], (s) => setStats(Array.isArray(s) ? s : [])),
+      loadJson<{ people?: UserStats[]; cleaner?: CleanerSummary | null }>("/api/stats", {}, (s) => {
+        setStats(Array.isArray(s.people) ? s.people : []);
+        setCleanerSummary(s.cleaner ?? null);
+      }),
       loadJson<HouseVac & { houseVacation?: boolean } | null>("/api/settings", null, (settings) => {
         if (!settings) return;
         setHouse({
@@ -248,7 +254,7 @@ export default function UsersPage() {
 
   function startNew() {
     setEditing(null);
-    setForm(emptyForm(COLORS[users.length % COLORS.length]));
+    setForm(emptyForm(COLORS[users.filter((u) => !u.cleaner).length % COLORS.length]));
     setShowForm(true);
   }
 
@@ -331,6 +337,7 @@ export default function UsersPage() {
   }
 
   const today = calendarDayStr();
+  const people = users.filter((user) => !user.cleaner);
   const houseAway = houseVacationActive(house, today);
 
   const maxYearly = Math.max(...stats.map((s) => s.yearly), 1);
@@ -445,7 +452,7 @@ export default function UsersPage() {
       <div className="flex items-center justify-between gap-3 mb-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">People</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>{users.length} household member{users.length !== 1 ? "s" : ""}</p>
+          <p className="text-sm mt-1" style={{ color: "var(--text2)" }}>{people.length} household member{people.length !== 1 ? "s" : ""}</p>
         </div>
         {notifyMsg && (
           <p className="text-sm shrink-0 max-w-[14rem] truncate" style={{ color: "var(--text2)" }}>{notifyMsg}</p>
@@ -466,6 +473,31 @@ export default function UsersPage() {
         </div>
       )}
 
+      {cleanerSummary && (
+        <div className="mb-4 px-4 py-4 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
+          <p className="text-sm font-medium mb-3">Cleaner</p>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              {
+                label: "pts last clean",
+                value: cleanerSummary.last?.points ?? 0,
+                note: cleanerSummary.last
+                  ? (cleanerSummary.last.day === today ? "Today" : format(parseISO(`${cleanerSummary.last.day}T12:00:00`), "MMM d"))
+                  : "None yet",
+              },
+              { label: "pts this month", value: cleanerSummary.month, note: "\u00a0" },
+              { label: "pts this year", value: cleanerSummary.year, note: "\u00a0" },
+            ].map(({ label, value, note }) => (
+              <div key={label} className="text-center py-2.5 px-2 rounded-xl" style={{ background: "var(--surface2)" }}>
+                <div className="text-xl font-semibold">{value}</div>
+                <div className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>{label}</div>
+                <div className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>{note}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         {showForm && !editing && (
           <div className="p-5 rounded-2xl space-y-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
@@ -474,7 +506,7 @@ export default function UsersPage() {
           </div>
         )}
 
-        {users.map((user) => {
+        {people.map((user) => {
           const userStats = stats.find((s) => s.user.id === user.id);
           return (
             <div key={user.id} className="rounded-2xl overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" }}>
@@ -495,9 +527,7 @@ export default function UsersPage() {
                     {(houseAway || vacationActive(user, today)) && (
                       <span className="text-xs font-normal px-1.5 py-px rounded-full" style={{ background: "var(--accent)22", color: "var(--accent)" }}>away</span>
                     )}
-                    {user.cleaner ? (
-                      <span className="text-xs font-normal px-1.5 py-px rounded-full" style={{ background: "var(--accent)22", color: "var(--accent)" }}>cleaner</span>
-                    ) : !user.hasPassword && (
+                    {!user.hasPassword && (
                       <span className="text-xs font-normal px-1.5 py-px rounded-full" style={{ background: "var(--red)22", color: "var(--red)" }}>no password</span>
                     )}
                   </p>
@@ -589,7 +619,7 @@ export default function UsersPage() {
           );
         })}
 
-        {users.length === 0 && (
+        {people.length === 0 && (
           <div className="text-center py-20" style={{ color: "var(--text2)" }}>
             <p className="text-4xl mb-3">👤</p>
             <p className="font-medium">No people yet</p>
